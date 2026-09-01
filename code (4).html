@@ -1,0 +1,2376 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>樂團譜架 · Orchestra Stand</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{--bg:#101418;--panel:#1a2027;--panel2:#222b34;--text:#e8edf2;--muted:#93a1b0;
+    --accent:#4da3ff;--gold:#ffcc4d;--danger:#ff6b6b;--ok:#4dd882;--hh:64px}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif}
+  header{position:fixed;top:0;left:0;right:0;z-index:40;background:var(--panel);padding:12px 16px;
+    display:flex;align-items:center;gap:10px;box-shadow:0 2px 10px rgba(0,0,0,.4)}
+  header h1{font-size:18px;margin:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pill{background:var(--panel2);border:1px solid #33414f;color:var(--text);border-radius:999px;
+    padding:8px 12px;font-size:14px;cursor:pointer;min-height:40px;text-decoration:none;
+    display:inline-flex;align-items:center;gap:4px;flex-shrink:0}
+  .pill.active{border-color:var(--gold);color:var(--gold)}
+  #view{padding:16px;max-width:860px;margin:0 auto;
+    padding-top:calc(var(--hh) + 16px);padding-bottom:120px}
+  .card{background:var(--panel);border-radius:14px;padding:16px;margin-bottom:14px}
+  .card h3{margin:0 0 4px;font-size:17px;word-break:break-all}
+  .meta{color:var(--muted);font-size:13px;margin-bottom:12px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:none;
+    border-radius:12px;padding:12px 16px;font-size:15px;min-height:48px;cursor:pointer;
+    background:var(--panel2);color:var(--text)}
+  .btn.primary{background:var(--accent);color:#04121f;font-weight:700}
+  .btn.warn{background:var(--danger);color:#2b0505;font-weight:700}
+  .btn.gold{background:var(--gold);color:#241b02;font-weight:700}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  input[type=password]{width:100%;background:var(--panel2);border:1px solid #33414f;
+    color:var(--text);border-radius:12px;padding:12px 14px;font-size:16px;margin:8px 0}
+  .muted{color:var(--muted);font-size:13px}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:130px;background:#000e;
+    color:#fff;padding:14px 20px;border-radius:12px;z-index:99;max-width:92%;white-space:pre-line;
+    text-align:center;font-size:15px;display:none}
+  .badge{background:var(--panel2);border:1px solid #33414f;border-radius:999px;
+    padding:6px 12px;font-size:13px;white-space:nowrap}
+  .badge.master-live{border-color:var(--ok);color:var(--ok)}
+  .badge.live-gold{border-color:var(--gold);color:var(--gold);font-weight:700}
+  #liveBanner{background:linear-gradient(135deg,#3a2f08,#2a230a);border:1px solid var(--gold);
+    border-radius:14px;padding:14px 16px;margin-bottom:14px;display:flex;align-items:center;
+    gap:12px;flex-wrap:wrap}
+  #liveBanner .txt{flex:1;min-width:180px}
+  #liveBanner .txt b{color:var(--gold)}
+  .viewer{position:fixed;left:0;right:0;bottom:0;top:var(--hh);
+    background:var(--bg);display:flex;flex-direction:column;z-index:30}
+  .vtop{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--panel);
+    overflow-x:auto;flex-shrink:0}
+  .vtop .title{font-weight:700;font-size:15px;white-space:nowrap}
+  .tools{display:none;align-items:center;gap:8px;padding:8px 12px;
+    background:var(--panel);border-top:1px solid #2a3540;overflow-x:auto;flex-shrink:0;
+    scrollbar-width:thin}
+  .tbtn{background:var(--panel2);border:2px solid #33414f;color:var(--text);border-radius:10px;
+    min-width:40px;height:40px;font-size:16px;cursor:pointer;flex-shrink:0;
+    display:inline-flex;align-items:center;justify-content:center;padding:0 10px;white-space:nowrap}
+  .tbtn.active{border-color:var(--gold);color:var(--gold)}
+  .swatch{width:36px;height:36px;border-radius:50%;background:#fff;
+    border:2px solid #566572;display:inline-flex;align-items:center;justify-content:center;
+    cursor:pointer;flex-shrink:0;padding:0}
+  .swatch span{width:22px;height:22px;border-radius:50%;display:block}
+  .swatch.active{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold)}
+  #fabDock{position:absolute;right:12px;bottom:96px;z-index:36;display:none;
+    flex-direction:column;align-items:center;gap:8px}
+  .fabActions{display:none;flex-direction:column;gap:8px}
+  .fabMini{width:46px;height:46px;border-radius:50%;border:2px solid #33414f;
+    background:var(--panel2);font-size:18px;cursor:pointer;padding:0;line-height:1}
+  #fab{width:50px;height:50px;border-radius:50%;border:2px solid var(--gold);
+    background:var(--panel2);color:var(--gold);font-size:20px;cursor:pointer;
+    touch-action:none;user-select:none;padding:0;line-height:1}
+  #fsExit{position:absolute;top:10px;right:10px;z-index:37;display:none}
+  #thickPop,#textPop,#printPop{position:fixed;left:50%;bottom:120px;transform:translateX(-50%);
+    background:var(--panel);border:1px solid #33414f;border-radius:14px;padding:14px 16px;
+    display:none;z-index:60;box-shadow:0 6px 24px rgba(0,0,0,.7);width:min(92vw,360px)}
+  #thickPop input[type=range],#textPop input[type=range],#layerPop input[type=range]{
+    width:100%;height:32px;margin:6px 0 2px;accent-color:var(--accent)}
+  .plabel{font-size:13px;color:var(--muted);margin:10px 0 4px}
+  #printPop label{display:flex;align-items:center;gap:8px;padding:6px 2px;font-size:14px}
+  #printPop input[type=radio]{accent-color:var(--accent);width:18px;height:18px}
+  #textPop textarea{width:100%;background:var(--panel2);border:1px solid #33414f;
+    color:var(--text);border-radius:12px;padding:10px 12px;font-size:15px;resize:vertical;margin-top:8px}
+  #clearOverlay,#layerOverlay{position:fixed;left:0;right:0;top:0;bottom:0;background:#000b;
+    z-index:80;display:none}
+  #clearPop,#layerPop{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
+    background:var(--panel);border-radius:18px;padding:20px 18px;display:none;
+    box-shadow:0 10px 40px rgba(0,0,0,.8);width:min(92vw,400px);
+    max-height:86vh;overflow:auto;z-index:81}
+  #clearPop{border:2px solid var(--danger)}
+  #layerPop{border:2px solid var(--accent)}
+  #clearPop h3,#layerPop h3{margin:0 0 10px;font-size:18px;text-align:center}
+  #clearBody{font-size:15px;line-height:1.8;color:#dfe7ee}
+  #clearBody b{color:var(--gold)}
+  #clearBody .own{background:var(--panel2);border-radius:8px;padding:2px 10px;
+    display:inline-block;margin:2px 0}
+  #clearGo{width:100%;min-height:56px;font-size:17px;margin-top:14px}
+  #clearCancel{width:100%;min-height:52px;font-size:16px;margin-top:10px}
+  #undoChip{position:fixed;left:50%;transform:translateX(-50%);bottom:80px;z-index:70;
+    display:none;border-color:var(--gold);color:var(--gold);font-weight:700;
+    box-shadow:0 4px 18px rgba(0,0,0,.6)}
+  .lrow{display:flex;align-items:center;gap:8px;padding:10px 6px;
+    border-bottom:1px solid #2a3540;font-size:15px}
+  .lrow:last-child{border-bottom:none}
+  .lrow input[type=radio]{accent-color:var(--accent);width:18px;height:18px;flex-shrink:0}
+  .lrow .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .lrow .del{background:none;border:none;color:var(--danger);font-size:17px;
+    cursor:pointer;padding:4px 8px;flex-shrink:0}
+  #stage{flex:1;overflow:auto;padding:8px}
+  #zoomWrap{position:relative;margin:0 auto;width:max-content;transform-origin:top center}
+  #stage.drawing{outline:2px dashed var(--gold);outline-offset:-2px}
+  #pdfCanvas{background:#fff;border-radius:6px;box-shadow:0 4px 20px rgba(0,0,0,.5);max-width:none;display:block}
+  .vctrl{display:flex;align-items:center;justify-content:center;gap:14px;padding:12px;
+    background:var(--panel);flex-shrink:0;flex-wrap:wrap}
+  .pagenum{font-size:15px;color:var(--muted);min-width:90px;text-align:center}
+  body.fs-mode header, body.fs-mode .vtop, body.fs-mode .vctrl{display:none}
+  body.fs-mode .viewer{top:0}
+  body.fs-mode #fsExit{display:inline-flex}
+  #printArea{display:none}
+  @media print{
+    @page{margin:8mm}
+    body.printing > *:not(#printArea){display:none!important}
+    body.printing #printArea{display:block!important}
+    #printArea img{width:100%;display:block;page-break-after:always}
+    #printArea img:last-child{page-break-after:auto}
+  }
+  .center{text-align:center}
+  .spinner{width:38px;height:38px;border:4px solid #33414f;border-top-color:var(--accent);
+    border-radius:50%;animation:spin 1s linear infinite;margin:40px auto}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  details{background:var(--panel);border-radius:12px;padding:12px 16px;margin-bottom:10px}
+  summary{font-weight:700;cursor:pointer;font-size:15px}
+  details div{margin-top:10px;line-height:1.7;font-size:14px;color:#cdd7e1}
+  details b{color:var(--gold)}
+  .step{background:var(--panel2);border-radius:10px;padding:8px 12px;margin:6px 0}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="appTitle">🎼 樂團譜架</h1>
+  <a class="pill" href="#/help">❓ <span id="helpLabel">說明</span></a>
+  <button class="pill" id="langBtn" onclick="toggleLang()">EN</button>
+</header>
+<div id="view"></div>
+<div class="toast" id="toast"></div>
+<button class="pill" id="undoChip" onclick="undoCleared()">↩️ 復原清除</button>
+<div id="printArea"></div>
+<div id="clearOverlay"></div>
+<div id="clearPop">
+  <h3 id="clearTitle"></h3>
+  <div id="clearBody"></div>
+  <button class="btn warn" id="clearGo"></button>
+  <button class="btn" id="clearCancel" onclick="closeClearPop()"></button>
+</div>
+<div id="layerOverlay" onclick="closeLayerPop()"></div>
+<div id="layerPop">
+  <h3 id="layerTitle">🗂️ 圖層對比</h3>
+  <div id="layerList"></div>
+  <div class="plabel" id="layerAlphaLabel"></div>
+  <input type="range" id="layerAlphaR" min="10" max="100" step="5">
+  <div class="meta" id="layerHint"></div>
+  <input type="file" id="layerFile" accept="application/pdf" style="display:none">
+  <div class="row" style="margin-top:10px;justify-content:flex-end">
+    <button class="btn primary" id="layerUploadBtn" style="display:none"
+      onclick="uploadLayer()">⬆️</button>
+    <button class="btn" onclick="closeLayerPop()"></button>
+  </div>
+</div>
+
+<script>
+/* ================= 設定 ================= */
+const SUPABASE_URL = 'https://bfatudxcmwkgiqzgdosn.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_kLc1qqJY28vBljmwXEUHgw_hLJCynll';
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const COLORS = { red:'#ff5252', blue:'#4da3ff', green:'#3ddc84', orange:'#ffb648',
+  black:'#1c1c1c', white:'#ffffff' };
+const ZOOM_MAX = 5;
+
+/* ================= 雙語（中文為正式書面語） ================= */
+const I18N = {
+  zh: {
+    appTitle:'🎼 樂團譜架', helpLabel:'說明', library:'樂譜庫',
+    adminSection:'🔐 譜務 PDF 管理', adminPwLabel:'譜務密碼',
+    unlock:'解鎖', adminOk:'✅ 譜務已解鎖',
+    uploadBtn:'📄 選擇 PDF 檔案（可多選，批次上載）',
+    uploadDone:'✅ 全部上載完成', uploading:'上載中',
+    broadcast:'📻 廣播此譜',
+    stopB:'⏹️ 取消廣播', stopOk:'⏹️ 已取消廣播',
+    stopConfirm:'確定取消廣播？此樂譜將停止向全團廣播。',
+    liveTag:'📻 廣播中',
+    del:'🗑️', confirmDel:'確定刪除「{t}」？此動作無法復原。',
+    noScores:'尚未有任何樂譜。請先解鎖譜務 PDF 管理，批次上載全部 PDF。',
+    backLib:'← 返回樂譜庫', noBroadcast:'現在沒有廣播中的樂譜',
+    goLib:'前往樂譜庫瀏覽', masterPage:'主控頁', jumpMaster:'⇢ 跳至主控頁',
+    editBtn:'🔑 解鎖編輯', editOk:'✅ 編輯已解鎖',
+    youMaster:'👑 您是主控', wrongPw:'❌ 密碼錯誤',
+    startOk:'📻 已開始廣播', delOk:'✅ 已刪除',
+    askName:'您的姓名（將標記於您繪製的每一筆弓法，並用作編輯者名額識別）：',
+    nameSet:'✅ 姓名已更新：{n}',
+    viewBtn:'👁️ 檢視', viewTag:'👁️ 檢視中',
+    liveNow:'📻 正在廣播', goLive:'📺 點擊觀看',
+    backLive:'📻 廣播中 →',
+    whiteTip:'🧴 白油模式：以白色筆跡覆蓋原有或匯入的弓法，之後可重新繪製（可擦除、可復原）',
+    /* 雙編輯者 */
+    claimOk1:'👑 您已成為主控（編輯者 1/2）',
+    claimOk2:'🤝 您已成為協作編輯（編輯者 2/2，翻頁不會廣播）',
+    editorsFull:'⚠️ 目前已有兩位編輯者，請稍後再試或等名額釋放',
+    slotLost:'⚠️ 編輯資格已失效，請重新解鎖編輯',
+    exitEditConfirm:'退出編輯並釋放編輯名額？',
+    exitEditOk:'🔓 已退出編輯',
+    roleCo:'🤝 協作編輯',
+    takeoverB:'👑 接管主控', takeoverOk:'👑 已接管主控',
+    /* 圖層 */
+    layersB:'🗂️ 圖層', layerTitle:'🗂️ 圖層對比',
+    layerBase:'原譜（隱藏圖層）',
+    layerAlphaLabel:'圖層透明度',
+    layerHint:'💡 選擇姓名即可將該圖層 PDF 半透明疊於原譜上對比；選擇「原譜」可遮住圖層，查看乾淨原譜進行編輯。圖層僅供畫面對比，列印／匯出不包含圖層。',
+    layerUpload:'⬆️ 上載我的圖層 PDF',
+    layerNameAsk:'圖層名稱（顯示給全團，例如：小提琴Ⅰ 弓法）：',
+    layerUploaded:'✅ 圖層已上載',
+    layerPageMismatch:'❌ 頁數不符（原譜 {a} 頁，此檔 {b} 頁）。請匯出與原譜相同頁數的 PDF。',
+    layerDelConfirm:'確定刪除此圖層？',
+    layerDeleted:'🗑️ 已刪除圖層',
+    layerNone:'尚未有任何圖層。',
+    undoB:'↩️ 復原', clearPageMine:'🧹 清除本頁我的',
+    nothingMine:'本頁沒有弓法',
+    clearPageOk:'✅ 已清除本頁您的弓法',
+    clearAllL:'👑 清除全頁弓法',
+    clearAllOk:'👑 已清除本頁全部弓法',
+    nothingUndo:'沒有可復原的弓法', undoOk:'↩️ 已復原一筆',
+    eraseOk:'🧽 已刪除此筆弓法',
+    notYours:'🚫 此筆由「{n}」繪製（僅總監可刪除）',
+    chiefErased:'👑 已刪除「{n}」的弓法',
+    textNotYours:'🚫 此段文字由「{n}」撰寫（僅總監可修改）',
+    chiefOn:'👑 總監模式', chiefOff:'👑 總監',
+    chiefAsk:'輸入譜務密碼以啟用「總監模式」？',
+    chiefOk:'👑 總監模式已啟用',
+    chiefFail:'❌ 密碼錯誤（或尚未執行 verify_admin_pw 函數）',
+    chiefExit:'退出總監模式？',
+    clearMineT:'🧹 清除本頁我的弓法',
+    clearAllT:'👑 清除全頁弓法',
+    clearMineBody:'您在<b>第 {p} 頁</b>繪製的 <b>{n} 筆弓法</b>將被刪除。',
+    clearAllBody:'<b>第 {p} 頁</b>的 <b>{n} 筆弓法</b>將全部被刪除，包括：',
+    clearUndoHint:'💡 清除後 30 秒內可點擊「↩️ 復原清除」還原。',
+    clearNoTouch:'✔️ 文字標註與<b>其他頁面均不受影響</b>。',
+    clearGoAll:'✅ 確認：清除本頁全部弓法',
+    clearGoMine:'✅ 確認：清除本頁我的弓法',
+    clearCancel:'✋ 取消（不清除）',
+    undoClearedOk:'↩️ 已復原被清除的弓法',
+    undoClearedFail:'⚠️ 復原部分失敗，請重新整理頁面',
+    thickLabel:'筆尖粗細（0.5–12px）', stampLabel:'Π/V 記號大小（×0.3–3）', done:'完成',
+    addText:'📝 新增文字', editText:'📝 編輯文字',
+    textPlaceholder:'輸入文字…（Enter 換行）',
+    textSizeLabel:'字體大小', textColorLabel:'顏色',
+    textSave:'✅ 儲存', textCancel:'取消', textDel:'🗑️ 刪除文字',
+    textSaved:'✅ 已新增文字', textUpdated:'✅ 已更新文字', textDeleted:'🗑️ 已刪除文字',
+    textMovedOk:'✅ 文字位置已更新', textNeedContent:'請先輸入文字',
+    textHint:'💡 選擇 📝 工具時：點擊空白處新增文字、點擊文字編輯內容、拖曳文字移動位置。',
+    confirmDelText:'確定刪除此段文字？',
+    printB:'🖨️ 列印', printTitle:'🖨️ 列印／匯出',
+    printLayer:'內容', both:'弓法 + 文字', bowOnly:'僅弓法',
+    textOnly:'僅文字', clean:'乾淨樂譜（原譜）',
+    printScope:'範圍', curPage:'當前頁', allPages:'整份樂譜',
+    genPrint:'🖨️ 列印', exportB:'⬇️ 匯出 PDF',
+    printing:'產生中…', exportDone:'✅ PDF 已下載', close:'關閉',
+    loadFail:'載入失敗',
+    noPdfLib:'⚠️ PDF 元件未載入，請檢查網絡後重新整理',
+    fsBtn:'⛶ 全螢幕', fsExit:'✕ 退出全螢幕', helpTitle:'📖 使用說明'
+  },
+  en: {
+    appTitle:'🎼 Orchestra Stand', helpLabel:'Help', library:'Score Library',
+    adminSection:'🔐 Orchestra Librarian · PDF Admin', adminPwLabel:'Librarian password',
+    unlock:'Unlock', adminOk:'✅ Librarian unlocked',
+    uploadBtn:'📄 Choose PDF files (batch upload)',
+    uploadDone:'✅ All uploads finished', uploading:'Uploading',
+    broadcast:'📻 Broadcast',
+    stopB:'⏹️ Stop broadcast', stopOk:'✅ Broadcast stopped',
+    stopConfirm:'Stop broadcasting? This score will no longer appear on the live page.',
+    liveTag:'📻 Live',
+    del:'🗑️', confirmDel:'Delete "{t}"? This cannot be undone.',
+    noScores:'No scores yet. Unlock PDF Admin and upload all your PDFs.',
+    backLib:'← Library', noBroadcast:'Nothing is being broadcast right now',
+    goLib:'Go to library', masterPage:'Master', jumpMaster:'⇢ Jump to master page',
+    editBtn:'🔑 Unlock edit', editOk:'✅ Edit unlocked',
+    youMaster:'👑 You are the master', wrongPw:'❌ Wrong password',
+    startOk:'📻 Broadcasting started', delOk:'✅ Deleted',
+    askName:'Your name (tags every stroke you draw, and identifies your editor slot):',
+    nameSet:'✅ Name updated: {n}',
+    viewBtn:'👁️ View', viewTag:'👁️ Viewing',
+    liveNow:'📻 Now broadcasting', goLive:'📺 Watch now',
+    backLive:'📻 Live →',
+    whiteTip:'🧴 Whiteout: cover imported/baked-in bowings with white strokes, then redraw',
+    claimOk1:'👑 You are the Master (editor 1/2)',
+    claimOk2:'🤝 You are a Co-editor (2/2, page turns not broadcast)',
+    editorsFull:'⚠️ Already 2 editors — try again later',
+    slotLost:'⚠️ Editor slot lost — please unlock again',
+    exitEditConfirm:'Exit editing and release your editor slot?',
+    exitEditOk:'🔓 Exited editing',
+    roleCo:'🤝 Co-editor',
+    takeoverB:'👑 Take over master', takeoverOk:'👑 You are now the Master',
+    layersB:'🗂️ Layers', layerTitle:'🗂️ Layer compare',
+    layerBase:'Original (hide layers)',
+    layerAlphaLabel:'Layer opacity',
+    layerHint:'💡 Pick a name to overlay that layer PDF on the score; pick "Original" to hide layers and edit. Layers are on-screen only — not included in print/export.',
+    layerUpload:'⬆️ Upload my layer PDF',
+    layerNameAsk:'Layer name (shown to everyone, e.g. Violin I bows):',
+    layerUploaded:'✅ Layer uploaded',
+    layerPageMismatch:'❌ Page count mismatch (score {a}p, file {b}p). Export the same number of pages.',
+    layerDelConfirm:'Delete this layer?',
+    layerDeleted:'🗑️ Layer deleted',
+    layerNone:'No layers yet.',
+    undoB:'↩️ Undo', clearPageMine:'🧹 Clear mine (page)',
+    nothingMine:'No strokes on this page',
+    clearPageOk:'✅ Your strokes on this page cleared',
+    clearAllL:'👑 Clear page (all)',
+    clearAllOk:'👑 Whole page cleared',
+    nothingUndo:'Nothing to undo', undoOk:'↩️ Stroke removed',
+    eraseOk:'🧽 Stroke erased',
+    notYours:'🚫 Drawn by "{n}" (only the Chief can erase it)',
+    chiefErased:'👑 Erased "{n}"\'s stroke',
+    textNotYours:'🚫 Written by "{n}" (only the Chief can edit it)',
+    chiefOn:'👑 Chief', chiefOff:'👑 Chief',
+    chiefAsk:'Enter Librarian password to enable Chief mode?',
+    chiefOk:'👑 Chief mode enabled',
+    chiefFail:'❌ Wrong password (or verify_admin_pw not created)',
+    chiefExit:'Exit Chief mode?',
+    clearMineT:'🧹 Clear my strokes (this page)',
+    clearAllT:'👑 Clear ALL bowings (this page)',
+    clearMineBody:'Your <b>{n} strokes</b> on <b>page {p}</b> will be deleted.',
+    clearAllBody:'<b>{n} strokes</b> on <b>page {p}</b> will ALL be deleted, including:',
+    clearUndoHint:'💡 Tap "Undo clear" within 30 seconds to restore.',
+    clearNoTouch:'✔️ Text annotations and <b>other pages are NOT affected</b>.',
+    clearGoAll:'✅ Confirm: clear all on this page',
+    clearGoMine:'✅ Confirm: clear mine on this page',
+    clearCancel:'✋ Cancel (do not clear)',
+    undoClearedOk:'↩️ Cleared strokes restored',
+    undoClearedFail:'⚠️ Some restores failed — please reload',
+    thickLabel:'Pen thickness (0.5–12px)', stampLabel:'Π/V stamp size (×0.3–3)', done:'Done',
+    addText:'📝 Add text', editText:'📝 Edit text',
+    textPlaceholder:'Type text… (Enter for new line)',
+    textSizeLabel:'Font size', textColorLabel:'Color',
+    textSave:'✅ Save', textCancel:'Cancel', textDel:'🗑️ Delete text',
+    textSaved:'✅ Text added', textUpdated:'✅ Text updated', textDeleted:'🗑️ Text deleted',
+    textMovedOk:'✅ Text moved', textNeedContent:'Please type some text first',
+    textHint:'💡 With the 📝 tool: tap empty space to add, tap text to edit, drag text to move.',
+    confirmDelText:'Delete this text?',
+    printB:'🖨️ Print', printTitle:'🖨️ Print / Export',
+    printLayer:'Content', both:'Bowings + text', bowOnly:'Bowings only',
+    textOnly:'Text only', clean:'Clean score (original)',
+    printScope:'Range', curPage:'Current page', allPages:'Whole score',
+    genPrint:'🖨️ Print', exportB:'⬇️ Export PDF',
+    printing:'Preparing…', exportDone:'✅ PDF downloaded', close:'Close',
+    loadFail:'Failed to load',
+    noPdfLib:'⚠️ PDF library not loaded — check connection and reload',
+    fsBtn:'⛶ Fullscreen', fsExit:'✕ Exit fullscreen', helpTitle:'📖 User Guide'
+  }
+};
+let lang = localStorage.getItem('app_lang') || 'zh';
+function t(k, vars){
+  let s = (I18N[lang] && I18N[lang][k]) || I18N.zh[k] || k;
+  if(vars) for(const key in vars) s = s.replace('{'+key+'}', vars[key]);
+  return s;
+}
+function toggleLang(){
+  lang = (lang === 'zh') ? 'en' : 'zh';
+  localStorage.setItem('app_lang', lang);
+  route(); fitHeader();
+}
+
+/* ================= 狀態 ================= */
+const state = {
+  adminPw: localStorage.getItem('adminPw') || '',
+  editPw:  localStorage.getItem('editPw') || '',
+  isEditor: false,          /* 必須經 claim 先算數 */
+  editorSlot: null,
+  isBroadcaster: false,
+  masterName: '',
+  hbTimer: null,
+  isChief: false,
+  myName: localStorage.getItem('drawerName') || '',
+  scores: [], liveScoreId: null,
+  pdf: null, pdfScoreId: null, numPages: 0, currentPage: 1, masterPage: 1,
+  zoom: 1, fsMode: false, viewMode: false,
+  tool: null, dash: false, drawColor: 'red',
+  thick: parseFloat(localStorage.getItem('penThick')) || 3,
+  stampScale: parseFloat(localStorage.getItem('stampScale')) || 1,
+  textColor: localStorage.getItem('textColorKey') || 'black',
+  textSize: parseFloat(localStorage.getItem('textSize')) || 24,
+  strokes: [], texts: [], _drawingNow: false,
+  layers: [], layerSel: null,
+  layerAlpha: parseFloat(localStorage.getItem('layerAlpha')) || 0.55,
+  _vp: null
+};
+const layerDocs = new Map();
+let penSeen = localStorage.getItem('usesPen') === '1';
+
+/* ================= 小工具 ================= */
+const $ = id => document.getElementById(id);
+function esc(s){ return String(s??'').replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+let toastTimer;
+function toast(msg){
+  const el = $('toast'); el.textContent = msg; el.style.display = 'block';
+  clearTimeout(toastTimer); toastTimer = setTimeout(()=> el.style.display='none', 2600);
+}
+function fmtSize(n){
+  if(!n) return '';
+  if(n > 1048576) return (n/1048576).toFixed(1)+' MB';
+  return Math.round(n/1024)+' KB';
+}
+function fmtTh(v){ return (v % 1 === 0) ? String(v) : v.toFixed(1); }
+function isWrongPw(err){ return err && String(err.message||'').includes('WRONG_PASSWORD'); }
+function fitHeader(){
+  const h = document.querySelector('header');
+  if(h) document.documentElement.style.setProperty('--hh', h.offsetHeight + 'px');
+}
+function isMine(s){ return !!state.myName && String(s.drawer_name||'') === state.myName; }
+function ownerOf(s){ return s.drawer_name || '（未署名）'; }
+function parseStroke(s){
+  const m = String(s).match(/^(P|HL|DS|LN|LD|Π|V)?#([0-9a-fA-F]{3,8})(?:~([\d.]+))?(?:~([\d.]+))?$/);
+  if(!m) return { kind:'P', hex:'#ff5252', th:3, sc:1 };
+  return { kind:m[1]||'P', hex:'#'+m[2], th:parseFloat(m[3])||3, sc:parseFloat(m[4])||1 };
+}
+function encodeStroke(kind, hex, th, sc){
+  const pre = (kind === 'P') ? '' : kind;
+  if(kind === 'Π' || kind === 'V')
+    return pre + hex + '~' + (th||3) + '~' + (sc||1);
+  return pre + hex + '~' + (th||3);
+}
+function guessColorKey(hex){
+  for(const k in COLORS)
+    if(COLORS[k].toLowerCase() === String(hex||'').toLowerCase()) return k;
+  return 'black';
+}
+function inViewerPage(){
+  return location.hash.startsWith('#/live') || location.hash.startsWith('#/view');
+}
+
+/* ================= 路由 ================= */
+window.addEventListener('hashchange', route);
+async function route(){
+  fitHeader();
+  if(location.hash.startsWith('#/live')) await renderLive();
+  else if(location.hash.startsWith('#/view/')) await renderView(location.hash.split('/')[2]);
+  else if(location.hash.startsWith('#/help')) renderHelp();
+  else await renderLibrary();
+}
+
+/* ================= 樂譜庫頁 ================= */
+async function renderLibrary(){
+  $('appTitle').textContent = t('appTitle');
+  $('helpLabel').textContent = t('helpLabel');
+  $('langBtn').textContent = (lang === 'zh') ? 'EN' : '中';
+
+  let live = null;
+  try{
+    const r = await db.from('broadcast')
+      .select('*, score:scores(*)').eq('id', 1).single();
+    if(r.data && r.data.score) live = r.data.score;
+  }catch(e){}
+
+  let listHtml = '';
+  try{
+    const { data, error } = await db.from('scores')
+      .select('*').order('created_at', { ascending:false });
+    if(error) throw error;
+    state.scores = data || [];
+  }catch(err){ toast('Load error: '+err.message); }
+
+  if(state.scores.length === 0){
+    listHtml = `<div class="card center"><p>${t('noScores')}</p></div>`;
+  }else{
+    listHtml = state.scores.map(s => {
+      const isLive = live && live.id === s.id;
+      return `
+      <div class="card">
+        <h3>🎼 ${esc(s.title)}
+          ${isLive ? ` <span class="badge live-gold">${t('liveTag')}</span>` : ''}</h3>
+        <div class="meta">${new Date(s.created_at).toLocaleDateString()} ·
+          ${s.page_count||'?'} ${lang==='zh'?'頁':'pages'} · ${fmtSize(s.file_size)}</div>
+        <div class="row">
+          <a class="btn" style="text-decoration:none"
+             href="#/view/${s.id}">${t('viewBtn')}</a>
+          ${isLive
+            ? `<a class="btn gold" style="text-decoration:none" href="#/live">${t('goLive')}</a>
+               <button class="btn warn" onclick="stopBroadcast()">${t('stopB')}</button>`
+            : `<button class="btn gold" onclick="doBroadcast('${s.id}')">${t('broadcast')}</button>`}
+          ${state.adminPw ? `<button class="btn warn" onclick="doDelete('${s.id}')">${t('del')}</button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  const liveBanner = live ? `
+    <div id="liveBanner">
+      <div class="txt"><b>${t('liveNow')}</b><br>🎼 ${esc(live.title)}</div>
+      <a class="btn gold" style="text-decoration:none" href="#/live">${t('goLive')}</a>
+    </div>` : '';
+
+  const adminHtml = state.adminPw
+    ? `<div class="card">
+         <h3>${t('adminSection')}</h3>
+         <div class="meta">${t('adminOk')}</div>
+         <input type="file" id="fileInput" accept="application/pdf" multiple style="display:none"
+           onchange="handleFiles(this.files)">
+         <button class="btn primary block" onclick="document.getElementById('fileInput').click()">
+           ${t('uploadBtn')}</button>
+         <div class="meta" id="uploadProgress" style="margin-top:10px"></div>
+       </div>`
+    : `<div class="card">
+         <h3>${t('adminSection')}</h3>
+         <input type="password" id="pwInput" placeholder="${t('adminPwLabel')}">
+         <button class="btn primary block" onclick="unlockAdmin()">${t('unlock')}</button>
+       </div>`;
+
+  $('view').innerHTML = liveBanner + adminHtml +
+    `<h2 style="font-size:16px;color:var(--muted)">📚 ${t('library')}</h2>` + listHtml;
+  fitHeader();
+}
+
+function unlockAdmin(){
+  const v = $('pwInput').value.trim();
+  if(!v) return;
+  state.adminPw = v; localStorage.setItem('adminPw', v);
+  renderLibrary();
+}
+
+async function handleFiles(files){
+  if(!files || files.length === 0) return;
+  const prog = $('uploadProgress');
+  const total = files.length;
+  for(let i = 0; i < total; i++){
+    const f = files[i];
+    prog.textContent = `⏳ ${t('uploading')} (${i+1}/${total}): ${f.name}`;
+    try{
+      const buf = new Uint8Array(await f.arrayBuffer());
+      const doc = await pdfjsLib.getDocument({ data: buf }).promise;
+      const pageCount = doc.numPages; doc.destroy();
+      const safeName = f.name.replace(/[^\w.\-\u4e00-\u9fa5]/g, '_');
+      const path = Date.now() + '_' + safeName;
+      const up = await db.storage.from('scores').upload(path, f,
+        { contentType:'application/pdf', upsert:false });
+      if(up.error) throw up.error;
+      const r = await db.rpc('create_score', {
+        p_admin_pw: state.adminPw,
+        p_title: f.name.replace(/\.pdf$/i, '').slice(0,120),
+        p_file_path: path, p_file_size: f.size, p_page_count: pageCount });
+      if(r.error){
+        db.storage.from('scores').remove([path]);
+        throw r.error;
+      }
+    }catch(err){
+      if(isWrongPw(err)){
+        toast(t('wrongPw')); state.adminPw=''; localStorage.removeItem('adminPw');
+        renderLibrary(); return;
+      }
+      toast('Upload error: '+err.message);
+    }
+  }
+  prog.textContent = t('uploadDone');
+  toast(t('uploadDone'));
+  setTimeout(renderLibrary, 800);
+}
+
+async function doBroadcast(id){
+  if(!state.editPw){
+    const pw = prompt(t('editBtn'));
+    if(!pw) return;
+    state.editPw = pw;
+  }
+  const { error } = await db.rpc('start_broadcast',
+    { p_edit_pw: state.editPw, p_score_id: id });
+  if(error){
+    if(isWrongPw(error)){
+      state.editPw=''; localStorage.removeItem('editPw');
+      toast(t('wrongPw'));
+    } else toast(error.message);
+    return;
+  }
+  localStorage.setItem('editPw', state.editPw);
+  /* 廣播者同時認領編輯名額 */
+  if(!state.isEditor){
+    if(!state.myName){
+      const n = prompt(t('askName'));
+      if(n){ const v = n.trim().slice(0,24); if(v){ state.myName=v; localStorage.setItem('drawerName',v); } }
+    }
+    const slot = await tryClaim(state.editPw, state.myName);
+    if(slot != null) applyClaim(slot, state.editPw, true);
+    else toast(t('editorsFull'));
+  }
+  toast(t('startOk'));
+  location.hash = '#/live';
+}
+
+async function stopBroadcast(){
+  if(!state.editPw){
+    const pw = prompt(lang === 'zh' ? '輸入編輯密碼：' : 'Enter edit password:');
+    if(!pw) return;
+    state.editPw = pw;
+  }
+  if(!confirm(t('stopConfirm'))) return;
+  const { error } = await db.rpc('stop_broadcast', { p_edit_pw: state.editPw });
+  if(error){
+    if(isWrongPw(error)){
+      state.editPw=''; localStorage.removeItem('editPw');
+      toast(t('wrongPw'));
+    } else toast(error.message);
+    return;
+  }
+  localStorage.setItem('editPw', state.editPw);
+  toast(t('stopOk'));
+  if(location.hash.startsWith('#/live')) location.hash = '#/library';
+  else renderLibrary();
+}
+
+async function doDelete(id){
+  const s = state.scores.find(x => x.id === id);
+  if(!confirm(t('confirmDel', { t: s ? s.title : '' }))) return;
+  const { error } = await db.rpc('delete_score',
+    { p_admin_pw: state.adminPw, p_score_id: id });
+  if(error){
+    if(isWrongPw(error)){
+      state.adminPw=''; localStorage.removeItem('adminPw'); toast(t('wrongPw'));
+    } else toast(error.message);
+    return;
+  }
+  if(s && s.file_path){
+    try{ await db.storage.from('scores').remove([s.file_path]); }catch(e){}
+  }
+  toast(t('delOk'));
+  renderLibrary();
+}
+
+/* ================= 檢視頁 /view/{id}（唯讀） ================= */
+async function renderView(scoreId){
+  $('appTitle').textContent = t('appTitle');
+  $('helpLabel').textContent = t('helpLabel');
+  $('langBtn').textContent = (lang === 'zh') ? 'EN' : '中';
+  state.tool = null; state.dash = false; state.viewMode = true;
+  closePrintPop(); closeTextPop(); toggleThickPop(false); closeLayerPop();
+
+  let score = null;
+  try{
+    const r = await db.from('scores').select('*').eq('id', scoreId).single();
+    score = r.data;
+  }catch(e){}
+  if(!score){
+    $('view').innerHTML = `<div class="card center" style="margin-top:40px">
+      <p>⚠️ ${t('loadFail')}</p>
+      <a class="btn primary" style="text-decoration:none" href="#/library">${t('backLib')}</a>
+    </div>`;
+    return;
+  }
+
+  let liveId = null;
+  try{
+    const r = await db.from('broadcast').select('score_id').eq('id', 1).single();
+    liveId = r.data && r.data.score_id;
+  }catch(e){}
+
+  $('view').innerHTML = `
+    <div class="viewer">
+      <div class="vtop">
+        <a class="pill" href="#/library" style="text-decoration:none">${t('backLib')}</a>
+        <div class="title">${esc(score.title)}</div>
+        <span class="badge">${t('viewTag')}</span>
+        ${liveId ? `<button class="pill" onclick="location.hash='#/live'">${t('backLive')}</button>` : ''}
+        <button class="pill" onclick="openLayerPop()">${t('layersB')}</button>
+        <button class="pill" onclick="openPrintPop()">${t('printB')}</button>
+      </div>
+      <div id="stage"><div class="spinner"></div></div>
+      <button class="pill" id="fsExit" onclick="toggleFullscreen()">${t('fsExit')}</button>
+      <div id="printPop">
+        <h3 style="margin:0 0 4px;font-size:16px">${t('printTitle')}</h3>
+        <div class="plabel">${t('printLayer')}</div>
+        <label><input type="radio" name="pl" value="both" checked>${t('both')}</label>
+        <label><input type="radio" name="pl" value="bow">${t('bowOnly')}</label>
+        <label><input type="radio" name="pl" value="text">${t('textOnly')}</label>
+        <label><input type="radio" name="pl" value="clean">${t('clean')}</label>
+        <div class="plabel">${t('printScope')}</div>
+        <label><input type="radio" name="ps" value="page" checked>${t('curPage')}</label>
+        <label><input type="radio" name="ps" value="all">${t('allPages')}</label>
+        <div class="meta" id="printProg" style="margin-top:8px"></div>
+        <div class="row" style="margin-top:10px;justify-content:flex-end">
+          <button class="btn" onclick="closePrintPop()">${t('close')}</button>
+          <button class="btn gold" onclick="doExport()">${t('exportB')}</button>
+          <button class="btn primary" onclick="doPrint()">${t('genPrint')}</button>
+        </div>
+      </div>
+      <div class="vctrl">
+        <button class="btn" id="prevBtn" onclick="goTo(state.currentPage-1)">◀</button>
+        <div class="pagenum" id="pageNum"></div>
+        <button class="btn" id="nextBtn" onclick="goTo(state.currentPage+1)">▶</button>
+        <button class="pill" id="zoomBtn" onclick="resetZoom()">🔍 1×</button>
+        <button class="pill" onclick="toggleFullscreen()">${t('fsBtn')}</button>
+      </div>
+    </div>`;
+  fitHeader();
+
+  state.liveScoreId = score.id;
+  state.strokes = []; state.texts = [];
+  const ok = await loadPdf(score);
+  if(ok){ await goTo(1, false); }
+  updateZoomUI();
+}
+
+/* ================= 廣播頁 /live ================= */
+async function renderLive(){
+  state.viewMode = false;
+  $('view').innerHTML = `
+    <div class="viewer">
+      <div class="vtop">
+        <a class="pill" href="#/library" style="text-decoration:none">${t('backLib')}</a>
+        <div class="title" id="vTitle"></div>
+        <span class="badge" id="masterBadge"></span>
+        <button class="pill" id="jumpBtn" onclick="jumpToMaster()">${t('jumpMaster')}</button>
+        <button class="pill" id="editBtn" onclick="unlockEdit()">${t('editBtn')}</button>
+        <button class="pill" id="takeoverBtn" style="display:none" onclick="takeoverMaster()">${t('takeoverB')}</button>
+        <button class="pill" id="nameBadge" onclick="editName()" title="Name">✍️ <span id="nameVal">—</span></button>
+        <button class="pill" id="chiefBtn" onclick="toggleChief()">${t('chiefOff')}</button>
+        <button class="pill" id="stopBtn" style="display:none" onclick="stopBroadcast()">${t('stopB')}</button>
+        <button class="pill" id="layerBtn" onclick="openLayerPop()">${t('layersB')}</button>
+        <button class="pill" onclick="openPrintPop()">${t('printB')}</button>
+      </div>
+      <div class="tools" id="toolsRow">
+        <button class="tbtn" id="modePen" onclick="setTool('pen')" title="Pen">✍️</button>
+        <button class="tbtn" id="modeHl" onclick="setTool('hl')" title="Highlighter">🖍️</button>
+        <button class="tbtn" id="modeDash" onclick="toggleDash()" title="Dashed">┄</button>
+        <button class="tbtn" id="modeLine" onclick="setTool('line')" title="Line">╱</button>
+        <button class="tbtn" id="modePD" onclick="setTool('stampDown')" style="font-weight:700">Π</button>
+        <button class="tbtn" id="modePU" onclick="setTool('stampUp')" style="font-weight:700">V</button>
+        <button class="tbtn" id="modeEr" onclick="setTool('erase')" title="Tap to erase">🧽</button>
+        <button class="tbtn" id="modeTx" onclick="setTool('text')" title="Text">📝</button>
+        <button class="tbtn" id="thickBtn" onclick="toggleThickPop()">●<span id="thickVal" style="font-size:12px;margin-left:2px">3</span></button>
+        <button class="swatch" data-c="red" onclick="setDrawColor('red')"><span style="background:#ff5252"></span></button>
+        <button class="swatch" data-c="blue" onclick="setDrawColor('blue')"><span style="background:#4da3ff"></span></button>
+        <button class="swatch" data-c="green" onclick="setDrawColor('green')"><span style="background:#3ddc84"></span></button>
+        <button class="swatch" data-c="orange" onclick="setDrawColor('orange')"><span style="background:#ffb648"></span></button>
+        <button class="swatch" data-c="black" onclick="setDrawColor('black')"><span style="background:#1c1c1c"></span></button>
+        <button class="swatch" data-c="white" onclick="setDrawColor('white')"><span style="background:#ffffff;border:1px solid #c8d2dc"></span></button>
+        <button class="tbtn" onclick="undoStroke()">${t('undoB')}</button>
+        <button class="tbtn" onclick="openClearConfirm('mine')">${t('clearPageMine')}</button>
+        <button class="tbtn" id="clearAllBtn" style="display:none" onclick="openClearConfirm('all')">${t('clearAllL')}</button>
+      </div>
+      <div id="stage"><div class="spinner"></div></div>
+      <button class="pill" id="fsExit" onclick="toggleFullscreen()">${t('fsExit')}</button>
+      <div id="fabDock">
+        <div class="fabActions">
+          <button class="fabMini" onclick="undoStroke()" title="Undo">↩️</button>
+          <button class="fabMini" onclick="openClearConfirm('mine')" title="Clear mine (page)">🧹</button>
+        </div>
+        <button id="fab">🛠️</button>
+      </div>
+      <div id="thickPop">
+        <div style="font-size:13px;color:var(--muted)">${t('thickLabel')}</div>
+        <input type="range" id="thickRange" min="0.5" max="12" step="0.5">
+        <canvas id="thickPrev" width="220" height="30" style="width:100%;background:#fff;border-radius:6px"></canvas>
+        <div class="plabel">${t('stampLabel')} <span id="stampVal">×1.0</span></div>
+        <input type="range" id="stampRange" min="0.3" max="3" step="0.1">
+        <canvas id="stampPrev" width="220" height="56" style="width:100%;background:#fff;border-radius:6px"></canvas>
+        <div class="row" style="margin-top:10px;justify-content:flex-end">
+          <button class="btn primary" style="min-height:40px;padding:8px 18px"
+            onclick="toggleThickPop()">${t('done')}</button>
+        </div>
+      </div>
+      <div id="textPop">
+        <h3 id="textPopTitle" style="margin:0 0 4px;font-size:16px">${t('addText')}</h3>
+        <textarea id="textArea" rows="3" placeholder="${t('textPlaceholder')}"></textarea>
+        <div class="plabel">${t('textSizeLabel')} <span id="textSizeVal">24</span></div>
+        <input type="range" id="textSizeR" min="10" max="60" step="1">
+        <div class="plabel">${t('textColorLabel')}</div>
+        <div class="row" style="gap:8px">
+          <button class="swatch tsw" data-tc="black" onclick="pickTextColor('black')"><span style="background:#1c1c1c"></span></button>
+          <button class="swatch tsw" data-tc="red" onclick="pickTextColor('red')"><span style="background:#ff5252"></span></button>
+          <button class="swatch tsw" data-tc="blue" onclick="pickTextColor('blue')"><span style="background:#4da3ff"></span></button>
+          <button class="swatch tsw" data-tc="green" onclick="pickTextColor('green')"><span style="background:#3ddc84"></span></button>
+          <button class="swatch tsw" data-tc="orange" onclick="pickTextColor('orange')"><span style="background:#ffb648"></span></button>
+        </div>
+        <div class="meta" style="margin-top:8px">${t('textHint')}</div>
+        <div class="row" style="margin-top:10px;justify-content:flex-end">
+          <button class="btn warn" id="textDelBtn" style="display:none" onclick="deleteText()">${t('textDel')}</button>
+          <button class="btn" onclick="closeTextPop()">${t('textCancel')}</button>
+          <button class="btn primary" onclick="saveText()">${t('textSave')}</button>
+        </div>
+      </div>
+      <div id="printPop">
+        <h3 style="margin:0 0 4px;font-size:16px">${t('printTitle')}</h3>
+        <div class="plabel">${t('printLayer')}</div>
+        <label><input type="radio" name="pl" value="both" checked>${t('both')}</label>
+        <label><input type="radio" name="pl" value="bow">${t('bowOnly')}</label>
+        <label><input type="radio" name="pl" value="text">${t('textOnly')}</label>
+        <label><input type="radio" name="pl" value="clean">${t('clean')}</label>
+        <div class="plabel">${t('printScope')}</div>
+        <label><input type="radio" name="ps" value="page" checked>${t('curPage')}</label>
+        <label><input type="radio" name="ps" value="all">${t('allPages')}</label>
+        <div class="meta" id="printProg" style="margin-top:8px"></div>
+        <div class="row" style="margin-top:10px;justify-content:flex-end">
+          <button class="btn" onclick="closePrintPop()">${t('close')}</button>
+          <button class="btn gold" onclick="doExport()">${t('exportB')}</button>
+          <button class="btn primary" onclick="doPrint()">${t('genPrint')}</button>
+        </div>
+      </div>
+      <div class="vctrl">
+        <button class="btn" id="prevBtn" onclick="goTo(state.currentPage-1)">◀</button>
+        <div class="pagenum" id="pageNum"></div>
+        <button class="btn" id="nextBtn" onclick="goTo(state.currentPage+1)">▶</button>
+        <button class="pill" id="zoomBtn" onclick="resetZoom()">🔍 1×</button>
+        <button class="pill" onclick="toggleFullscreen()">${t('fsBtn')}</button>
+      </div>
+    </div>`;
+  updateEditBtn(); updateTopUI(); updateToolsUI(); updateZoomUI(); setupFab(); fitHeader();
+  const cpw = localStorage.getItem('chiefPw');
+  if(cpw){
+    db.rpc('verify_admin_pw', { p_admin_pw: cpw })
+      .then(({ data }) => {
+        if(data){ state.isChief = true; updateTopUI(); updateToolsUI(); }
+        else localStorage.removeItem('chiefPw');
+      }).catch(()=>{});
+  }
+  await refreshLive(false);
+  /* 還原編輯名額（有密碼＋有姓名先試） */
+  if(state.editPw && !state.editorSlot && state.myName){
+    const slot = await tryClaim(state.editPw, state.myName, true);
+    if(slot != null) applyClaim(slot, state.editPw, true);
+    else { state.isEditor = false; toast(t('editorsFull')); }
+  }else if(state.editPw && !state.editorSlot && !state.myName){
+    state.isEditor = false;
+  }
+  updateEditBtn(); updateToolsUI(); updateFab(); applyTouchAction();
+}
+
+/* ================= 姓名 / 總監 ================= */
+function editName(){
+  const n = prompt(t('askName'), state.myName || '');
+  if(n == null) return;
+  const v = n.trim().slice(0, 24);
+  if(!v) return;
+  state.myName = v;
+  localStorage.setItem('drawerName', v);
+  toast(t('nameSet', { n: v }));
+  updateTopUI(); redrawInk();
+}
+async function toggleChief(){
+  if(state.isChief){
+    if(confirm(t('chiefExit'))){
+      state.isChief = false;
+      localStorage.removeItem('chiefPw');
+      updateTopUI(); updateToolsUI();
+    }
+    return;
+  }
+  const pw = prompt(t('chiefAsk'));
+  if(!pw) return;
+  try{
+    const { data, error } = await db.rpc('verify_admin_pw', { p_admin_pw: pw });
+    if(error || !data){ toast(t('chiefFail')); return; }
+    state.isChief = true;
+    localStorage.setItem('chiefPw', pw);
+    toast(t('chiefOk'));
+    updateTopUI(); updateToolsUI();
+  }catch(e){ toast(t('chiefFail')); }
+}
+function updateTopUI(){
+  const nv = $('nameVal');
+  if(nv) nv.textContent = state.myName || '—';
+  const cb = $('chiefBtn');
+  if(cb){
+    cb.textContent = state.isChief ? t('chiefOn') : t('chiefOff');
+    cb.classList.toggle('active', state.isChief);
+  }
+}
+
+/* ================= 編輯者名額（最多 2 人） ================= */
+async function tryClaim(pw, name, silent){
+  const { data, error } = await db.rpc('claim_editor',
+    { p_edit_pw: pw, p_name: name || '' });
+  if(error){
+    if(!silent){
+      if(isWrongPw(error)) toast(t('wrongPw'));
+      else if(String(error.message||'').includes('EDITORS_FULL')) toast(t('editorsFull'));
+      else toast(error.message || t('wrongPw'));
+    }
+    return null;
+  }
+  return data;
+}
+function applyClaim(slot, pw, silentToast){
+  state.editPw = pw;
+  localStorage.setItem('editPw', pw);
+  state.isEditor = true;
+  state.editorSlot = slot;
+  state.isBroadcaster = (slot === 1);
+  startHeartbeat();
+  updateEditBtn(); updateTopUI(); updateToolsUI(); updateFab(); applyTouchAction();
+  if(!silentToast) toast(slot === 1 ? t('claimOk1') : t('claimOk2'));
+}
+function startHeartbeat(){
+  stopHeartbeat();
+  state.hbTimer = setInterval(heartbeat, 15000);
+  heartbeat();
+}
+function stopHeartbeat(){
+  if(state.hbTimer){ clearInterval(state.hbTimer); state.hbTimer = null; }
+}
+async function heartbeat(){
+  if(!state.isEditor || state.editorSlot == null) return;
+  try{
+    const { data, error } = await db.rpc('heartbeat_editor',
+      { p_edit_pw: state.editPw, p_name: state.myName, p_slot: state.editorSlot });
+    if(error) throw error;
+    state.masterName = (data && data.master) || '';
+    updateEditBtn();
+  }catch(e){
+    if(String(e.message||'').includes('SLOT_LOST')){
+      const slot = await tryClaim(state.editPw, state.myName, true);
+      if(slot != null){ state.editorSlot = slot; state.isBroadcaster = (slot===1); updateEditBtn(); }
+      else degradeEditor();
+    }
+  }
+}
+function degradeEditor(){
+  state.isEditor = false; state.editorSlot = null; state.isBroadcaster = false;
+  state.masterName = '';
+  stopHeartbeat();
+  updateEditBtn(); updateToolsUI(); updateFab(); applyTouchAction();
+  toast(t('slotLost'));
+}
+async function releaseEdit(){
+  try{
+    await db.rpc('release_editor',
+      { p_edit_pw: state.editPw, p_name: state.myName, p_slot: state.editorSlot });
+  }catch(e){}
+  state.isEditor = false; state.editorSlot = null; state.isBroadcaster = false;
+  state.masterName = '';
+  stopHeartbeat();
+  updateEditBtn(); updateTopUI(); updateToolsUI(); updateFab(); applyTouchAction();
+  toast(t('exitEditOk'));
+}
+async function takeoverMaster(){
+  if(!state.isEditor || state.isBroadcaster) return;
+  try{
+    await db.rpc('release_editor',
+      { p_edit_pw: state.editPw, p_name: state.myName, p_slot: state.editorSlot });
+  }catch(e){}
+  const slot = await tryClaim(state.editPw, state.myName, true);
+  if(slot == null){ degradeEditor(); return; }
+  state.editorSlot = slot;
+  state.isBroadcaster = (slot === 1);
+  startHeartbeat(); updateEditBtn();
+  toast(slot === 1 ? t('takeoverOk') : t('editorsFull'));
+}
+async function unlockEdit(){
+  if(state.isEditor){
+    if(confirm(t('exitEditConfirm'))) await releaseEdit();
+    return;
+  }
+  if(!state.myName){
+    const n = prompt(t('askName'));
+    if(!n) return;
+    const v = n.trim().slice(0, 24);
+    if(!v) return;
+    state.myName = v;
+    localStorage.setItem('drawerName', v);
+    updateTopUI();
+  }
+  const pw = prompt(lang === 'zh' ? '輸入編輯密碼：' : 'Enter edit password:');
+  if(!pw) return;
+  const slot = await tryClaim(pw, state.myName);
+  if(slot == null) return;
+  applyClaim(slot, pw);
+}
+
+/* ================= 圖層對比 ================= */
+async function loadLayers(scoreId){
+  try{
+    const { data } = await db.from('layers').select('*')
+      .eq('score_id', scoreId).order('created_at');
+    state.layers = data || [];
+  }catch(e){ state.layers = []; }
+  if(state.layerSel && !state.layers.find(l => l.id === state.layerSel)){
+    state.layerSel = null;
+  }
+  renderLayer();
+  updateLayerBtn();
+}
+function updateLayerBtn(){
+  const b = $('layerBtn');
+  if(b) b.classList.toggle('active', !!state.layerSel);
+}
+async function getLayerDoc(layer){
+  if(layerDocs.has(layer.id)) return layerDocs.get(layer.id);
+  const url = `${SUPABASE_URL}/storage/v1/object/public/scores/${layer.file_path}`;
+  const doc = await pdfjsLib.getDocument(url).promise;
+  layerDocs.set(layer.id, doc);
+  return doc;
+}
+async function renderLayer(){
+  const lc = $('layerCanvas'); if(!lc) return;
+  const ctx = lc.getContext('2d');
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0, 0, lc.width, lc.height);
+  if(!state.layerSel) return;
+  const layer = state.layers.find(l => l.id === state.layerSel);
+  if(!layer) return;
+  try{
+    const doc = await getLayerDoc(layer);
+    const pg = await doc.getPage(Math.min(state.currentPage, doc.numPages));
+    const v1 = pg.getViewport({ scale: 1 });
+    const cssW = (state._vp && state._vp.cssW) || 800;
+    const vp = pg.getViewport({ scale: cssW / v1.width });
+    const dpr = lc.width / vp.width;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalAlpha = Math.max(0.1, Math.min(1, state.layerAlpha));
+    await pg.render({ canvasContext: ctx, viewport: vp }).promise;
+    ctx.globalAlpha = 1;
+  }catch(e){}
+}
+function setLayerSel(v){
+  state.layerSel = v || null;
+  updateLayerBtn();
+  renderLayer();
+  const list = $('layerList');
+  if(list){
+    list.querySelectorAll('input[name=lay]').forEach(r =>
+      r.checked = (r.value === (state.layerSel || '')));
+  }
+}
+function openLayerPop(){
+  const pop = $('layerPop'); if(!pop) return;
+  $('layerTitle').textContent = t('layerTitle');
+  $('layerHint').textContent = t('layerHint');
+  $('layerAlphaLabel').textContent = t('layerAlphaLabel') + ' ';
+  const val = document.createElement('span');
+  val.id = 'layerAlphaVal';
+  val.textContent = Math.round(state.layerAlpha * 100) + '%';
+  $('layerAlphaLabel').appendChild(val);
+  const ar = $('layerAlphaR');
+  ar.value = Math.round(state.layerAlpha * 100);
+  ar.oninput = () => {
+    state.layerAlpha = parseInt(ar.value, 10) / 100;
+    localStorage.setItem('layerAlpha', state.layerAlpha);
+    const v = $('layerAlphaVal');
+    if(v) v.textContent = ar.value + '%';
+    renderLayer();
+  };
+  const up = $('layerUploadBtn');
+  up.style.display = (state.isEditor && !state.viewMode) ? 'inline-flex' : 'none';
+  up.textContent = t('layerUpload');
+  pop.querySelector('.row .btn:last-child').textContent = t('close');
+  renderLayerList();
+  pop.style.display = 'block';
+  $('layerOverlay').style.display = 'block';
+}
+function renderLayerList(){
+  const list = $('layerList'); if(!list) return;
+  let html = `<label class="lrow">
+    <input type="radio" name="lay" value="" ${!state.layerSel?'checked':''}
+      onchange="setLayerSel('')">
+    <span class="grow">🎼 ${t('layerBase')}</span></label>`;
+  if(!state.layers.length){
+    html += `<div class="meta" style="padding:8px 4px">${t('layerNone')}</div>`;
+  }
+  state.layers.forEach(l => {
+    const canDel = state.viewMode ? false
+      : (String(l.owner_name||'') === state.myName || state.isChief);
+    html += `<label class="lrow">
+      <input type="radio" name="lay" value="${l.id}" ${state.layerSel===l.id?'checked':''}
+        onchange="setLayerSel('${l.id}')">
+      <span class="grow">📄 ${esc(l.layer_name)}
+        <span class="muted">· ${esc(l.owner_name||'')} · ${l.page_count}p</span></span>
+      ${canDel ? `<button class="del" onclick="event.preventDefault();deleteLayer('${l.id}')">🗑️</button>` : ''}
+    </label>`;
+  });
+  list.innerHTML = html;
+}
+function closeLayerPop(){
+  const pop = $('layerPop'); if(pop) pop.style.display = 'none';
+  const ov = $('layerOverlay'); if(ov) ov.style.display = 'none';
+}
+async function uploadLayer(){
+  if(!state.isEditor || state.viewMode || !state.liveScoreId) return;
+  const def = state.myName || '';
+  const name = prompt(t('layerNameAsk'), def);
+  if(!name) return;
+  const fi = $('layerFile');
+  fi.onchange = async () => {
+    const f = fi.files && fi.files[0];
+    fi.value = '';
+    if(!f) return;
+    try{
+      const buf = new Uint8Array(await f.arrayBuffer());
+      const doc = await pdfjsLib.getDocument({ data: buf }).promise;
+      const pc = doc.numPages; doc.destroy();
+      if(state.numPages && pc !== state.numPages){
+        toast(t('layerPageMismatch', { a: state.numPages, b: pc }));
+        return;
+      }
+      const safeName = f.name.replace(/[^\w.\-\u4e00-\u9fa5]/g, '_');
+      const path = 'layers/' + Date.now() + '_' + safeName;
+      const up = await db.storage.from('scores').upload(path, f,
+        { contentType:'application/pdf', upsert:false });
+      if(up.error) throw up.error;
+      const r = await db.rpc('add_layer', {
+        p_edit_pw: state.editPw, p_score_id: state.liveScoreId,
+        p_owner: state.myName, p_name: name.trim().slice(0,40),
+        p_file_path: path, p_page_count: pc });
+      if(r.error){
+        db.storage.from('scores').remove([path]);
+        if(isWrongPw(r.error)) toast(t('wrongPw')); else toast(r.error.message);
+        return;
+      }
+      toast(t('layerUploaded'));
+      await loadLayers(state.liveScoreId);
+      renderLayerList();
+    }catch(err){ toast('Error: '+err.message); }
+  };
+  fi.click();
+}
+async function deleteLayer(id){
+  if(!confirm(t('layerDelConfirm'))) return;
+  const { error } = await db.rpc('delete_layer', {
+    p_edit_pw: state.editPw, p_layer_id: id,
+    p_owner: state.myName,
+    p_admin_pw: state.isChief ? (localStorage.getItem('chiefPw') || state.adminPw || null) : null
+  });
+  if(error){
+    toast(isWrongPw(error) ? t('wrongPw') : error.message);
+    return;
+  }
+  if(state.layerSel === id) state.layerSel = null;
+  toast(t('layerDeleted'));
+  await loadLayers(state.liveScoreId);
+  renderLayerList();
+}
+
+/* FAB dock */
+const FAB = { sx:null, sy:0, ox:0, oy:0, moved:false, dock:null };
+function setupFab(){
+  const dock = $('fabDock'), fab = $('fab');
+  if(!dock || !fab) return;
+  FAB.dock = dock;
+  const saved = JSON.parse(localStorage.getItem('fabPos') || 'null');
+  if(saved && saved.x != null){
+    dock.style.left = saved.x + 'px'; dock.style.top = saved.y + 'px';
+    dock.style.right = 'auto'; dock.style.bottom = 'auto';
+  }
+  const down = e => {
+    const p = e.touches ? e.touches[0] : e;
+    FAB.sx = p.clientX; FAB.sy = p.clientY;
+    const r = dock.getBoundingClientRect();
+    FAB.ox = r.left; FAB.oy = r.top; FAB.moved = false;
+    if(e.cancelable) e.preventDefault();
+  };
+  const move = e => {
+    if(FAB.sx == null || !FAB.dock) return;
+    const p = e.touches ? e.touches[0] : e;
+    const dx = p.clientX - FAB.sx, dy = p.clientY - FAB.sy;
+    if(!FAB.moved && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) FAB.moved = true;
+    if(FAB.moved){
+      const d = FAB.dock;
+      const viewer = d.closest('.viewer') || document.body;
+      const vr = viewer.getBoundingClientRect();
+      const r = d.getBoundingClientRect();
+      const nx = Math.min(Math.max(vr.left + 4, FAB.ox + dx), vr.right - r.width - 4);
+      const ny = Math.min(Math.max(vr.top + 4, FAB.oy + dy), vr.bottom - r.height - 4);
+      d.style.left = (nx - vr.left) + 'px';
+      d.style.top = (ny - vr.top) + 'px';
+      d.style.right = 'auto'; d.style.bottom = 'auto';
+    }
+    if(e.cancelable) e.preventDefault();
+  };
+  const up = () => {
+    if(FAB.sx == null) return;
+    if(FAB.moved && FAB.dock){
+      localStorage.setItem('fabPos', JSON.stringify({
+        x: parseFloat(FAB.dock.style.left), y: parseFloat(FAB.dock.style.top) }));
+    } else toggleTools();
+    FAB.sx = null;
+  };
+  fab.addEventListener('touchstart', down, { passive:false });
+  fab.addEventListener('touchmove', move, { passive:false });
+  fab.addEventListener('touchend', up);
+  fab.addEventListener('mousedown', down);
+  if(!window.__fabWin){
+    window.__fabWin = true;
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  }
+}
+function setMiniVisible(open){
+  const a = document.querySelector('.fabActions');
+  if(a) a.style.display = open ? 'flex' : 'none';
+}
+function toggleTools(){
+  const row = $('toolsRow'), fab = $('fab');
+  if(!row || !fab) return;
+  const open = row.style.display !== 'flex';
+  row.style.display = open ? 'flex' : 'none';
+  setMiniVisible(open);
+  fab.textContent = open ? '✕' : '🛠️';
+  if(!open && state.tool){ state.tool = null; applyTouchAction(); updateToolsUI(); }
+}
+
+/* ================= 全螢幕 ================= */
+async function toggleFullscreen(){
+  const entering = !state.fsMode;
+  state.fsMode = entering;
+  document.body.classList.toggle('fs-mode', entering);
+  try{
+    if(entering && document.documentElement.requestFullscreen)
+      await document.documentElement.requestFullscreen();
+    else if(!entering && document.fullscreenElement)
+      await document.exitFullscreen();
+  }catch(e){}
+}
+document.addEventListener('fullscreenchange', () => {
+  if(!document.fullscreenElement && state.fsMode){
+    state.fsMode = false;
+    document.body.classList.remove('fs-mode');
+  }
+});
+
+async function refreshLive(isRealtime){
+  let data;
+  try{
+    const r = await db.from('broadcast')
+      .select('*, score:scores(*)').eq('id', 1).single();
+    if(r.error) throw r.error;
+    data = r.data;
+  }catch(err){ toast('Error: '+err.message); return; }
+
+  state.masterPage = (data && data.master_page) || 1;
+  const score = data && data.score;
+
+  if(!score){
+    state.liveScoreId = null;
+    const vt = $('vTitle'); if(vt) vt.textContent = '';
+    updateBadge();
+    const st = $('stage');
+    if(st) st.innerHTML = `<div class="card center" style="margin:40px auto">
+      <p>📭 ${t('noBroadcast')}</p>
+      <a class="btn primary" style="text-decoration:none" href="#/library">${t('goLib')}</a>
+    </div>`;
+    return;
+  }
+  if(score.id !== state.liveScoreId){
+    state.liveScoreId = score.id;
+    state.strokes = []; state.texts = [];
+    $('vTitle').textContent = score.title;
+    $('stage').innerHTML = `<div class="spinner"></div>`;
+    const ok = await loadPdf(score);
+    if(ok) await goTo(state.masterPage, false); else state.liveScoreId = null;
+  }else{
+    const vt = $('vTitle'); if(vt) vt.textContent = score.title;
+    await loadLayers(score.id);
+  }
+  updateBadge(); updateLayerBtn();
+}
+
+/* PDF 載入：同一工作階段同一份譜不會重新下載 */
+async function loadPdf(score){
+  try{
+    if(state.pdf && state.pdfScoreId === score.id){
+      await loadLayers(score.id);
+      return true;
+    }
+    if(state.pdf){ try{ state.pdf.destroy(); }catch(e){} state.pdf = null; }
+    layerDocs.forEach(d => { try{ d.destroy(); }catch(e){} });
+    layerDocs.clear();
+    state.layerSel = null;
+    state.pdfScoreId = score.id;
+    state.zoom = 1;
+    const url = `${SUPABASE_URL}/storage/v1/object/public/scores/${score.file_path}`;
+    const task = pdfjsLib.getDocument(url);
+    state.pdf = await task.promise;
+    state.numPages = state.pdf.numPages;
+    $('stage').innerHTML = `<div id="zoomWrap">
+      <canvas id="pdfCanvas"></canvas>
+      <canvas id="layerCanvas" style="position:absolute;left:0;top:0;pointer-events:none"></canvas>
+      <canvas id="inkCanvas" style="position:absolute;left:0;top:0"></canvas>
+    </div>`;
+    setupStageGestures(); setupInk(); applyTouchAction();
+    await loadLayers(score.id);
+    return true;
+  }catch(err){
+    $('stage').innerHTML = `<div class="center" style="margin:40px auto;color:var(--danger)">
+      ⚠️ ${t('loadFail')}<br><span class="muted">${esc(err.message)}</span></div>`;
+    return false;
+  }
+}
+
+async function renderPage(n){
+  if(!state.pdf) return;
+  n = Math.max(1, Math.min(state.numPages, n));
+  state.currentPage = n;
+  const page = await state.pdf.getPage(n);
+  const stage = $('stage');
+  const zoom = state.zoom || 1;
+  const baseW = Math.max(320, stage.clientWidth - 16);
+  const v1 = page.getViewport({ scale: 1 });
+  const vp = page.getViewport({ scale: (baseW * zoom) / v1.width });
+  state._vp = { cssW: vp.width, cssH: vp.height };
+  const canvas = $('pdfCanvas');
+  let dpr = Math.min(2, window.devicePixelRatio || 1);
+  const MAX_DIM = 8192, MAX_AREA = 16.5e6;
+  let cw = vp.width * dpr, ch = vp.height * dpr;
+  if(cw > MAX_DIM){ dpr *= MAX_DIM / cw; cw = MAX_DIM; ch = vp.height * dpr; }
+  if(cw * ch > MAX_AREA){
+    const f = Math.sqrt(MAX_AREA / (cw * ch));
+    dpr *= f; cw *= f; ch *= f;
+  }
+  canvas.width = Math.round(cw); canvas.height = Math.round(ch);
+  canvas.style.width = vp.width + 'px';
+  canvas.style.height = vp.height + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  await page.render({ canvasContext: ctx, viewport: vp }).promise;
+  const ink = $('inkCanvas');
+  const lc = $('layerCanvas');
+  if(ink){
+    ink.width = canvas.width; ink.height = canvas.height;
+    ink.style.width = canvas.style.width; ink.style.height = canvas.style.height;
+  }
+  if(lc){
+    lc.width = canvas.width; lc.height = canvas.height;
+    lc.style.width = canvas.style.width; lc.style.height = canvas.style.height;
+  }
+  applyTouchAction();
+  await renderLayer();
+  redrawInk();
+  const pn = $('pageNum');
+  if(pn) pn.textContent = n + ' / ' + state.numPages;
+  updateZoomUI();
+}
+
+async function loadStrokes(){
+  if(!state.liveScoreId || state._drawingNow) return;
+  try{
+    const { data } = await db.from('strokes').select('*')
+      .eq('score_id', state.liveScoreId).eq('page', state.currentPage)
+      .order('created_at');
+    state.strokes = data || [];
+  }catch(e){ state.strokes = []; }
+  redrawInk();
+}
+async function loadTexts(){
+  if(!state.liveScoreId || state._drawingNow) return;
+  try{
+    const { data } = await db.from('texts').select('*')
+      .eq('score_id', state.liveScoreId).eq('page', state.currentPage)
+      .order('created_at');
+    state.texts = data || [];
+  }catch(e){ state.texts = []; }
+  redrawInk();
+}
+
+let masterTimer = null;
+async function goTo(n, broadcast){
+  if(!state.pdf) return;
+  const target = Math.max(1, Math.min(state.numPages, n));
+  await renderPage(target);
+  await Promise.all([loadStrokes(), loadTexts()]);
+  if(broadcast !== false && state.isBroadcaster){
+    clearTimeout(masterTimer);
+    masterTimer = setTimeout(async () => {
+      const { error } = await db.rpc('set_master_page',
+        { p_edit_pw: state.editPw, p_page: state.currentPage });
+      if(error && isWrongPw(error)) toast(t('wrongPw'));
+    }, 250);
+  }
+}
+function jumpToMaster(){ goTo(state.masterPage, false); }
+
+/* ================= 縮放 ================= */
+function applyTouchAction(){
+  const ink = $('inkCanvas'), st = $('stage');
+  if(!ink && !st) return;
+  const mode = (state.tool && state.isEditor && !state.viewMode) ? 'none'
+    : (state.zoom > 1 ? 'pan-x pan-y' : 'pan-y');
+  if(ink) ink.style.touchAction = mode;
+  if(st) st.style.touchAction = mode;
+}
+function updateZoomUI(){
+  const b = $('zoomBtn'); if(!b) return;
+  const z = state.zoom || 1;
+  b.textContent = z > 1.01 ? ('🔍 ' + z.toFixed(1) + '×') : '🔍 1×';
+  b.classList.toggle('active', z > 1.01);
+}
+async function commitZoom(){
+  const wrap = $('zoomWrap'); if(wrap) wrap.style.transform = 'scale(1)';
+  applyTouchAction();
+  const stage = $('stage');
+  const oldSW = stage.scrollWidth, oldSH = stage.scrollHeight;
+  const oldCX = stage.scrollLeft + stage.clientWidth/2;
+  const oldCY = stage.scrollTop + stage.clientHeight/2;
+  await renderPage(state.currentPage);
+  const rx = oldSW ? oldCX/oldSW : .5;
+  const ry = oldSH ? oldCY/oldSH : .5;
+  stage.scrollLeft = Math.max(0, rx*stage.scrollWidth - stage.clientWidth/2);
+  stage.scrollTop  = Math.max(0, ry*stage.scrollHeight - stage.clientHeight/2);
+}
+async function resetZoom(){
+  if(!state.pdf || state.zoom === 1) return;
+  state.zoom = 1;
+  await commitZoom();
+}
+
+/* ================= 工具 ================= */
+function setTool(tool){
+  state.tool = (state.tool === tool) ? null : tool;
+  applyTouchAction(); updateToolsUI();
+}
+function toggleDash(){
+  state.dash = !state.dash;
+  if(!state.tool) state.tool = 'pen';
+  applyTouchAction(); updateToolsUI();
+}
+function setDrawColor(c){
+  state.drawColor = c;
+  if(!state.tool) state.tool = 'pen';
+  updateToolsUI();
+}
+function updateFab(){
+  const d = $('fabDock'); if(!d) return;
+  d.style.display = (state.isEditor && !state.viewMode) ? 'flex' : 'none';
+}
+function updateToolsUI(){
+  const row = $('toolsRow'); if(!row) return;
+  if(state.isEditor && row.style.display !== 'none' && row.style.display !== 'flex')
+    row.style.display = 'flex';
+  if(!row.style.display) row.style.display = state.isEditor ? 'flex' : 'none';
+  const open = row.style.display === 'flex';
+  setMiniVisible(open);
+  const fab = $('fab');
+  if(fab) fab.textContent = open ? '✕' : '🛠️';
+  ['modePen','modeHl','modeDash','modeLine','modePD','modePU','modeEr','modeTx'].forEach(id => {
+    const b = $(id); if(b) b.classList.remove('active');
+  });
+  const map = { pen:'modePen', hl:'modeHl', line:'modeLine', text:'modeTx',
+    erase:'modeEr', stampDown:'modePD', stampUp:'modePU' };
+  if(state.tool && map[state.tool]){
+    const b = $(map[state.tool]); if(b) b.classList.add('active');
+  }
+  const db_ = $('modeDash');
+  if(db_) db_.classList.toggle('active', state.dash);
+  document.querySelectorAll('#toolsRow .swatch').forEach(el =>
+    el.classList.toggle('active', el.dataset.c === state.drawColor));
+  const tv = $('thickVal'); if(tv) tv.textContent = fmtTh(state.thick);
+  const svv = $('stampVal');
+  if(svv) svv.textContent = '×' + (state.stampScale||1).toFixed(1);
+  const cab = $('clearAllBtn');
+  if(cab) cab.style.display = (state.isChief && state.isEditor) ? 'inline-flex' : 'none';
+  const st = $('stage');
+  if(st) st.classList.toggle('drawing', !!(state.tool && state.isEditor && !state.viewMode));
+}
+
+/* 粗細／記號大小 彈出視窗 */
+function toggleThickPop(forceClose){
+  const pop = $('thickPop'); if(!pop) return;
+  if(forceClose === false){ pop.style.display = 'none'; return; }
+  const open = pop.style.display !== 'block';
+  pop.style.display = open ? 'block' : 'none';
+  if(!open) return;
+  const r = $('thickRange'), s = $('stampRange');
+  r.value = state.thick;
+  s.value = state.stampScale;
+  r.oninput = () => {
+    state.thick = parseFloat(r.value);
+    localStorage.setItem('penThick', state.thick);
+    const tv = $('thickVal'); if(tv) tv.textContent = fmtTh(state.thick);
+    updateThickPrev();
+  };
+  s.oninput = () => {
+    state.stampScale = parseFloat(s.value);
+    localStorage.setItem('stampScale', state.stampScale);
+    const sv = $('stampVal');
+    if(sv) sv.textContent = '×' + state.stampScale.toFixed(1);
+    updateThickPrev();
+  };
+  updateThickPrev();
+}
+function updateThickPrev(){
+  const cv = $('thickPrev');
+  if(cv){
+    const ctx = cv.getContext('2d');
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.strokeStyle = COLORS[state.drawColor];
+    ctx.lineWidth = Math.max(0.5, state.thick * (cv.width / 300));
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(14, cv.height/2);
+    ctx.bezierCurveTo(cv.width*0.3, 4, cv.width*0.7, cv.height-4, cv.width-14, cv.height/2);
+    ctx.stroke();
+  }
+  const sv = $('stampPrev');
+  if(sv){
+    const ctx = sv.getContext('2d');
+    ctx.clearRect(0, 0, sv.width, sv.height);
+    ctx.strokeStyle = COLORS[state.drawColor];
+    ctx.lineWidth = Math.max(1, 2.2 * state.stampScale);
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    const cy = sv.height/2;
+    const sz = Math.max(4, Math.min(sv.height*0.36, 8 + 12*state.stampScale));
+    let cx = sv.width*0.28;
+    ctx.beginPath();
+    ctx.moveTo(cx-sz, cy+sz); ctx.lineTo(cx-sz, cy-sz);
+    ctx.lineTo(cx+sz, cy-sz); ctx.lineTo(cx+sz, cy+sz);
+    ctx.stroke();
+    cx = sv.width*0.72;
+    ctx.beginPath();
+    ctx.moveTo(cx-sz, cy-sz); ctx.lineTo(cx, cy+sz); ctx.lineTo(cx+sz, cy-sz);
+    ctx.stroke();
+  }
+}
+
+/* ================= 繪製：筆跡（自己的有光環）+ 文字 ================= */
+function segWidth(ink, th, pt, kind){
+  let w = th * (ink.width / 800);
+  if(kind === 'HL') w *= 4;
+  if(pt && pt.p != null && pt.p > 0) w *= (0.4 + pt.p * 1.6);
+  return Math.max(1, w);
+}
+function drawPath(ctx, s, W, H){
+  const P = s.points;
+  if(!P || !P.length) return;
+  const ps = parseStroke(s.color);
+  ctx.strokeStyle = ps.hex; ctx.fillStyle = ps.hex;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.setLineDash([]);
+  if(ps.kind === 'Π' || ps.kind === 'V'){
+    const cx = P[0].x*W, cy = P[0].y*H, sz = W*0.024*(ps.sc||1);
+    ctx.lineWidth = Math.max(2, ps.th * (W/800));
+    ctx.beginPath();
+    if(ps.kind === 'Π'){
+      ctx.moveTo(cx-sz, cy+sz); ctx.lineTo(cx-sz, cy-sz);
+      ctx.lineTo(cx+sz, cy-sz); ctx.lineTo(cx+sz, cy+sz);
+    }else{
+      ctx.moveTo(cx-sz, cy-sz); ctx.lineTo(cx, cy+sz); ctx.lineTo(cx+sz, cy-sz);
+    }
+    ctx.stroke(); return;
+  }
+  if(ps.kind === 'DS' || ps.kind === 'LD') ctx.setLineDash([W*0.012, W*0.010]);
+  if(P.length === 1){
+    ctx.lineWidth = segWidth({width:W}, ps.th, P[0], ps.kind);
+    ctx.beginPath(); ctx.arc(P[0].x*W, P[0].y*H, ctx.lineWidth/2, 0, 7); ctx.fill();
+    ctx.setLineDash([]); return;
+  }
+  if(ps.kind === 'LN' || ps.kind === 'LD'){
+    ctx.lineWidth = segWidth({width:W}, ps.th, null, ps.kind);
+    ctx.beginPath(); ctx.moveTo(P[0].x*W, P[0].y*H);
+    ctx.lineTo(P[P.length-1].x*W, P[P.length-1].y*H);
+    ctx.stroke(); ctx.setLineDash([]); return;
+  }
+  for(let i = 0; i < P.length - 1; i++){
+    ctx.lineWidth = segWidth({width:W}, ps.th, P[i], ps.kind);
+    if(ps.kind === 'HL') ctx.globalAlpha = 0.35;
+    ctx.beginPath();
+    ctx.moveTo(P[i].x*W, P[i].y*H);
+    ctx.lineTo(P[i+1].x*W, P[i+1].y*H);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  ctx.setLineDash([]);
+}
+function drawHalo(ctx, s, W, H){
+  const P = s.points;
+  if(!P || !P.length) return;
+  const ps = parseStroke(s.color);
+  ctx.save();
+  ctx.globalAlpha = 0.16;
+  ctx.strokeStyle = ps.hex; ctx.fillStyle = ps.hex;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.setLineDash([]);
+  if(ps.kind === 'Π' || ps.kind === 'V'){
+    const cx = P[0].x*W, cy = P[0].y*H, sz = W*0.024*(ps.sc||1);
+    ctx.beginPath(); ctx.arc(cx, cy, sz*1.5 + 8, 0, 7); ctx.fill();
+    ctx.restore(); return;
+  }
+  if(P.length === 1){
+    const w = Math.max(12, segWidth({width:W}, ps.th, P[0], ps.kind) * 2.6);
+    ctx.beginPath(); ctx.arc(P[0].x*W, P[0].y*H, w/2, 0, 7); ctx.fill();
+    ctx.restore(); return;
+  }
+  ctx.lineWidth = Math.max(10, segWidth({width:W}, ps.th, null, ps.kind) * 2.6);
+  if(ps.kind === 'LN' || ps.kind === 'LD'){
+    if(ps.kind === 'LD') ctx.setLineDash([W*0.012, W*0.010]);
+    ctx.beginPath();
+    ctx.moveTo(P[0].x*W, P[0].y*H);
+    ctx.lineTo(P[P.length-1].x*W, P[P.length-1].y*H);
+    ctx.stroke(); ctx.restore(); return;
+  }
+  for(let i = 0; i < P.length - 1; i++){
+    ctx.beginPath();
+    ctx.moveTo(P[i].x*W, P[i].y*H);
+    ctx.lineTo(P[i+1].x*W, P[i+1].y*H);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+function drawTextAt(ctx, tx, W, H){
+  const fs = Math.max(4, (tx.size||24) * (W/800));
+  const lines = String(tx.content||'').split('\n');
+  ctx.font = fs + 'px system-ui, -apple-system, "PingFang TC", sans-serif';
+  ctx.textBaseline = 'top';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = 'rgba(255,255,255,.85)';
+  ctx.lineWidth = fs * 0.15;
+  ctx.fillStyle = tx.color || '#1c1c1c';
+  lines.forEach((ln, i) => {
+    const yy = tx.y*H + i*fs*1.35;
+    ctx.strokeText(ln, tx.x*W, yy);
+    ctx.fillText(ln, tx.x*W, yy);
+  });
+}
+function redrawInk(previewLine){
+  const ink = $('inkCanvas'); if(!ink) return;
+  const ctx = ink.getContext('2d');
+  ctx.clearRect(0, 0, ink.width, ink.height);
+  for(const s of state.strokes) if(isMine(s)) drawHalo(ctx, s, ink.width, ink.height);
+  for(const s of state.strokes) drawPath(ctx, s, ink.width, ink.height);
+  for(const tx of state.texts) drawTextAt(ctx, tx, ink.width, ink.height);
+  if(previewLine && previewLine.length === 2){
+    drawPath(ctx, { color: encodeStroke(
+      state.dash ? 'LD' : 'LN', COLORS[state.drawColor], state.thick),
+      points: previewLine }, ink.width, ink.height);
+  }
+}
+function hitStroke(px, py){
+  const ink = $('inkCanvas'); if(!ink) return null;
+  const W = ink.width, H = ink.height;
+  const tol = Math.max(16, W*0.014);
+  let other = null;
+  for(let i = state.strokes.length - 1; i >= 0; i--){
+    const s = state.strokes[i];
+    for(const p of s.points){
+      const dx = p.x*W - px, dy = p.y*H - py;
+      if(dx*dx + dy*dy < tol*tol){
+        if(isMine(s)) return s;
+        if(!other) other = s;
+        break;
+      }
+    }
+  }
+  return other;
+}
+let measureCtx = null;
+function hitText(px, py){
+  const ink = $('inkCanvas'); if(!ink || !state.texts.length) return null;
+  const W = ink.width, H = ink.height;
+  if(!measureCtx) measureCtx = document.createElement('canvas').getContext('2d');
+  for(let i = state.texts.length - 1; i >= 0; i--){
+    const tx = state.texts[i];
+    const fs = Math.max(4, (tx.size||24) * (W/800));
+    measureCtx.font = fs + 'px system-ui, -apple-system, "PingFang TC", sans-serif';
+    const lines = String(tx.content||'').split('\n');
+    let w = 0;
+    lines.forEach(ln => { w = Math.max(w, measureCtx.measureText(ln).width); });
+    const x0 = tx.x*W - 6, y0 = tx.y*H - 6;
+    const bw = w + 12, bh = lines.length*fs*1.35 + 12;
+    if(px >= x0 && px <= x0+bw && py >= y0 && py <= y0+bh) return tx;
+  }
+  return null;
+}
+async function eraseAt(p){
+  const ink = $('inkCanvas'); if(!ink) return;
+  const s = hitStroke(p.x*ink.width, p.y*ink.height);
+  if(!s) return;
+  const owner = ownerOf(s);
+  const mine = isMine(s);
+  if(!mine && !state.isChief){ toast(t('notYours', { n: owner })); return; }
+  const { error } = await db.rpc('delete_stroke',
+    { p_edit_pw: state.editPw, p_stroke_id: s.id });
+  if(error){ toast(isWrongPw(error) ? t('wrongPw') : error.message); return; }
+  state.strokes = state.strokes.filter(x => x.id !== s.id);
+  redrawInk();
+  toast(mine ? t('eraseOk') : t('chiefErased', { n: owner }));
+}
+
+/* ================= 文字對話框 ================= */
+let textEditing = null, textPos = null;
+function openTextDialog(tx, pos){
+  textEditing = tx || null; textPos = pos || null;
+  $('textPopTitle').textContent = tx ? t('editText') : t('addText');
+  $('textArea').value = tx ? tx.content : '';
+  const sz = tx ? Math.round(tx.size||24) : state.textSize;
+  state.textSize = sz;
+  $('textSizeR').value = sz;
+  $('textSizeVal').textContent = sz;
+  if(tx) state.textColor = guessColorKey(tx.color);
+  document.querySelectorAll('#textPop .tsw').forEach(el =>
+    el.classList.toggle('active', el.dataset.tc === state.textColor));
+  const canDel = tx && (isMine(tx) || state.isChief);
+  $('textDelBtn').style.display = canDel ? 'inline-flex' : 'none';
+  $('textPop').style.display = 'block';
+  setTimeout(()=>{ try{ $('textArea').focus(); }catch(e){} }, 120);
+}
+function closeTextPop(){
+  const pop = $('textPop'); if(pop) pop.style.display = 'none';
+  textEditing = null; textPos = null;
+}
+function pickTextColor(c){
+  state.textColor = c;
+  localStorage.setItem('textColorKey', c);
+  document.querySelectorAll('#textPop .tsw').forEach(el =>
+    el.classList.toggle('active', el.dataset.tc === c));
+}
+async function saveText(){
+  const content = $('textArea').value.trim();
+  if(!content){ toast(t('textNeedContent')); return; }
+  const size = state.textSize;
+  const color = COLORS[state.textColor] || '#1c1c1c';
+  if(textEditing){
+    const { error } = await db.rpc('update_text', {
+      p_edit_pw: state.editPw, p_text_id: textEditing.id,
+      p_content: content, p_size: size, p_color: color });
+    if(error){ toast(isWrongPw(error) ? t('wrongPw') : error.message); return; }
+    Object.assign(textEditing, { content, size, color });
+    toast(t('textUpdated'));
+  }else{
+    if(!state.liveScoreId || !textPos){ closeTextPop(); return; }
+    const r = await db.rpc('add_text', {
+      p_edit_pw: state.editPw, p_score_id: state.liveScoreId,
+      p_page: state.currentPage, p_name: state.myName,
+      p_content: content, p_x: textPos.x, p_y: textPos.y,
+      p_size: size, p_color: color });
+    if(r.error){ toast(isWrongPw(r.error) ? t('wrongPw') : r.error.message); return; }
+    state.texts.push({ id: r.data, drawer_name: state.myName,
+      page: state.currentPage, content, x: textPos.x, y: textPos.y, size, color });
+    toast(t('textSaved'));
+  }
+  closeTextPop(); redrawInk();
+}
+async function deleteText(){
+  if(!textEditing) return;
+  if(!isMine(textEditing) && !state.isChief){
+    toast(t('textNotYours', { n: ownerOf(textEditing) })); return;
+  }
+  if(!confirm(t('confirmDelText'))) return;
+  const { error } = await db.rpc('delete_text',
+    { p_edit_pw: state.editPw, p_text_id: textEditing.id });
+  if(error){ toast(isWrongPw(error) ? t('wrongPw') : error.message); return; }
+  state.texts = state.texts.filter(x => x.id !== textEditing.id);
+  toast(t('textDeleted'));
+  closeTextPop(); redrawInk();
+}
+
+/* ================= 清除確認（大字幕，可復原） ================= */
+let clearKind = null;
+let undoData = null;
+let undoTimer = null;
+function openClearConfirm(kind){
+  clearKind = kind;
+  const mine = state.strokes.filter(isMine);
+  const isAll = kind === 'all';
+  if(isAll && !state.strokes.length){ toast(t('nothingMine')); return; }
+  if(!isAll && !mine.length){ toast(t('nothingMine')); return; }
+  $('clearTitle').textContent = isAll ? t('clearAllT') : t('clearMineT');
+  let body = isAll
+    ? t('clearAllBody', { p: state.currentPage, n: state.strokes.length })
+    : t('clearMineBody', { p: state.currentPage, n: mine.length });
+  if(isAll){
+    const byOwner = {};
+    state.strokes.forEach(s => {
+      const o = ownerOf(s);
+      byOwner[o] = (byOwner[o]||0) + 1;
+    });
+    body += '<br>' + Object.entries(byOwner)
+      .map(([o,c]) => `<span class="own">✍️ ${esc(o)}：${c}</span>`).join(' ');
+  }
+  body += `<br><br>${t('clearUndoHint')}<br>${t('clearNoTouch')}`;
+  $('clearBody').innerHTML = body;
+  const go = $('clearGo');
+  $('clearCancel').textContent = t('clearCancel');
+  go.disabled = false;
+  go.textContent = isAll ? t('clearGoAll') : t('clearGoMine');
+  go.onclick = () => {
+    closeClearPop();
+    if(clearKind === 'all') doClearAll(); else doClearMine();
+  };
+  $('clearPop').style.display = 'block';
+  $('clearOverlay').style.display = 'block';
+}
+function closeClearPop(){
+  $('clearPop').style.display = 'none';
+  $('clearOverlay').style.display = 'none';
+}
+function showUndoChip(){
+  const chip = $('undoChip');
+  if(!chip) return;
+  chip.style.display = 'inline-flex';
+  clearTimeout(undoTimer);
+  undoTimer = setTimeout(() => {
+    chip.style.display = 'none';
+    undoData = null;
+  }, 30000);
+}
+async function undoCleared(){
+  if(!undoData || !undoData.strokes.length) return;
+  const d = undoData; undoData = null;
+  $('undoChip').style.display = 'none';
+  let fail = 0;
+  for(const s of d.strokes){
+    try{
+      const r = await db.rpc('add_stroke', {
+        p_edit_pw: state.editPw, p_score_id: d.scoreId,
+        p_page: d.page, p_name: s.drawer_name || '',
+        p_color: s.color, p_points: s.points });
+      if(r.error) fail++;
+    }catch(e){ fail++; }
+  }
+  if(state.currentPage !== d.page) await goTo(d.page, false);
+  else await loadStrokes();
+  toast(fail ? t('undoClearedFail') : t('undoClearedOk'));
+}
+async function doClearMine(){
+  if(!state.isEditor) return;
+  const mine = state.strokes.filter(isMine);
+  if(!mine.length){ toast(t('nothingMine')); return; }
+  undoData = { page: state.currentPage, scoreId: state.liveScoreId,
+    strokes: mine.map(s => ({ drawer_name: s.drawer_name, color: s.color, points: s.points })) };
+  for(const s of mine){
+    await db.rpc('delete_stroke', { p_edit_pw: state.editPw, p_stroke_id: s.id });
+  }
+  state.strokes = state.strokes.filter(s => !isMine(s));
+  redrawInk(); toast(t('clearPageOk'));
+  showUndoChip();
+}
+async function doClearAll(){
+  if(!state.isChief || !state.isEditor) return;
+  if(!state.strokes.length){ toast(t('nothingMine')); return; }
+  undoData = { page: state.currentPage, scoreId: state.liveScoreId,
+    strokes: state.strokes.map(s => ({ drawer_name: s.drawer_name, color: s.color, points: s.points })) };
+  for(const s of state.strokes.slice()){
+    await db.rpc('delete_stroke', { p_edit_pw: state.editPw, p_stroke_id: s.id });
+  }
+  state.strokes = [];
+  redrawInk(); toast(t('clearAllOk'));
+  showUndoChip();
+}
+
+/* ================= 繪製（pointer 事件） ================= */
+function setupInk(){
+  const ink = $('inkCanvas');
+  if(!ink || ink._bound) return;
+  ink._bound = true;
+  ink.addEventListener('contextmenu', e => e.preventDefault());
+  let drawing = false, erasing = false, last = null, pts = [], lineStart = null, textDrag = null;
+  const pos = e => {
+    const r = ink.getBoundingClientRect();
+    const o = { x: +((e.clientX - r.left)/r.width).toFixed(4),
+                y: +((e.clientY - r.top)/r.height).toFixed(4) };
+    if(e.pointerType === 'pen' && e.pressure > 0) o.p = +e.pressure.toFixed(3);
+    return o;
+  };
+  const cancel = () => {
+    if(textDrag){
+      textDrag.tx.x = textDrag.sx0; textDrag.tx.y = textDrag.sy0;
+      textDrag = null; redrawInk();
+    }
+    if(drawing || erasing){
+      drawing = false; erasing = false; state._drawingNow = false;
+      redrawInk();
+    }
+  };
+  window.__cancelDraw = cancel;
+  const ensureName = () => {
+    if(state.myName) return true;
+    const n = prompt(t('askName'));
+    if(!n) return false;
+    const v = n.trim().slice(0, 24);
+    if(!v) return false;
+    state.myName = v;
+    localStorage.setItem('drawerName', v);
+    updateTopUI();
+    return true;
+  };
+  ink.addEventListener('pointerdown', e => {
+    if(!state.isEditor || !state.tool || state.viewMode) return;
+    if(e.pointerType === 'pen'){
+      penSeen = true; localStorage.setItem('usesPen', '1');
+    }
+    if(penSeen && e.pointerType === 'touch') return;
+    if(drawing || erasing || textDrag) return;
+    if(!ensureName()) return;
+    e.preventDefault();
+    try{ ink.setPointerCapture(e.pointerId); }catch(err){}
+    const p = pos(e);
+    if(state.tool === 'text'){
+      const hit = hitText(p.x*ink.width, p.y*ink.height);
+      if(hit){
+        if(!isMine(hit) && !state.isChief){
+          toast(t('textNotYours', { n: ownerOf(hit) }));
+          return;
+        }
+        textDrag = { tx: hit, ox: p.x, oy: p.y, sx0: hit.x, sy0: hit.y, moved: false };
+      }else{
+        openTextDialog(null, { x: p.x, y: p.y });
+      }
+      return;
+    }
+    const wantErase = state.tool === 'erase' || e.pointerType === 'eraser' || (e.buttons & 32);
+    if(wantErase){ erasing = true; state._drawingNow = true; eraseAt(p); return; }
+    if(state.tool === 'stampDown' || state.tool === 'stampUp'){
+      commitStamp(p); return;
+    }
+    drawing = true; state._drawingNow = true;
+    pts = [p];
+    lineStart = (state.tool === 'line') ? p : null;
+    if(!lineStart){
+      last = { x: p.x*ink.width, y: p.y*ink.height };
+      const ctx = ink.getContext('2d');
+      styleCur(ctx); ctx.beginPath();
+      ctx.arc(last.x, last.y, ctx.lineWidth/2, 0, 7); ctx.fill();
+    }
+  });
+  ink.addEventListener('pointermove', e => {
+    if(erasing){
+      const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+      for(const ev of evs) eraseAt(pos(ev));
+      return;
+    }
+    if(textDrag){
+      const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+      const p = pos(evs[evs.length-1]);
+      const dx = p.x - textDrag.ox, dy = p.y - textDrag.oy;
+      if(!textDrag.moved && Math.hypot(dx, dy) > 0.015) textDrag.moved = true;
+      if(textDrag.moved){
+        textDrag.tx.x = Math.min(1, Math.max(0, textDrag.sx0 + dx));
+        textDrag.tx.y = Math.min(1, Math.max(0, textDrag.sy0 + dy));
+        redrawInk();
+      }
+      return;
+    }
+    if(!drawing) return;
+    const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+    if(lineStart){
+      const q = pos(evs[evs.length-1]);
+      redrawInk([lineStart, q]);
+      return;
+    }
+    const ctx = ink.getContext('2d');
+    styleCur(ctx);
+    for(const ev of evs){
+      const p = pos(ev); pts.push(p);
+      const q = { x: p.x*ink.width, y: p.y*ink.height };
+      ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+      last = q;
+    }
+  });
+  const finish = async () => {
+    if(erasing){ erasing = false; state._drawingNow = false; return; }
+    if(textDrag){
+      const td = textDrag; textDrag = null;
+      if(td.moved){
+        const { error } = await db.rpc('update_text', {
+          p_edit_pw: state.editPw, p_text_id: td.tx.id,
+          p_x: td.tx.x, p_y: td.tx.y });
+        if(error){
+          toast(isWrongPw(error) ? t('wrongPw') : error.message);
+          td.tx.x = td.sx0; td.tx.y = td.sy0; redrawInk();
+        }else toast(t('textMovedOk'));
+      }else openTextDialog(td.tx);
+      return;
+    }
+    if(!drawing) return;
+    drawing = false; state._drawingNow = false;
+    if(lineStart && pts.length >= 1){
+      redrawInk([lineStart, pts[pts.length-1]]);
+      pts = [lineStart, pts[pts.length-1]];
+    }
+    if(pts.length < 1 || !state.liveScoreId){ redrawInk(); return; }
+    const kind = (state.tool === 'hl') ? 'HL'
+      : (state.tool === 'line') ? (state.dash ? 'LD' : 'LN')
+      : (state.dash ? 'DS' : 'P');
+    const r = await db.rpc('add_stroke', {
+      p_edit_pw: state.editPw, p_score_id: state.liveScoreId,
+      p_page: state.currentPage, p_name: state.myName,
+      p_color: encodeStroke(kind, COLORS[state.drawColor], state.thick),
+      p_points: pts });
+    if(r.error){
+      toast(isWrongPw(r.error) ? t('wrongPw') : r.error.message);
+      redrawInk(); return;
+    }
+    state.strokes.push({ id: r.data, drawer_name: state.myName,
+      color: encodeStroke(kind, COLORS[state.drawColor], state.thick), points: pts });
+    redrawInk();
+  };
+  ink.addEventListener('pointerup', finish);
+  ink.addEventListener('pointercancel', cancel);
+  function styleCur(ctx){
+    const ps = parseStroke(encodeStroke(
+      (state.tool === 'hl') ? 'HL' : (state.dash ? 'DS' : 'P'),
+      COLORS[state.drawColor], state.thick));
+    ctx.strokeStyle = ps.hex; ctx.fillStyle = ps.hex;
+    ctx.lineWidth = segWidth(ink, ps.th, null, ps.kind);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.globalAlpha = (state.tool === 'hl') ? 0.35 : 1;
+    ctx.setLineDash([]);
+  }
+  async function commitStamp(p){
+    state._drawingNow = true;
+    const kind = (state.tool === 'stampDown') ? 'Π' : 'V';
+    const enc = encodeStroke(kind, COLORS[state.drawColor], state.thick, state.stampScale);
+    const r = await db.rpc('add_stroke', {
+      p_edit_pw: state.editPw, p_score_id: state.liveScoreId,
+      p_page: state.currentPage, p_name: state.myName,
+      p_color: enc, p_points: [p] });
+    if(r.error){
+      toast(isWrongPw(r.error) ? t('wrongPw') : r.error.message);
+    }else{
+      state.strokes.push({ id: r.data, drawer_name: state.myName, color: enc, points: [p] });
+      redrawInk();
+    }
+    state._drawingNow = false;
+  }
+}
+async function undoStroke(){
+  if(!state.isEditor) return;
+  const mine = state.strokes.filter(isMine);
+  if(!mine.length){ toast(t('nothingUndo')); return; }
+  const lastS = mine[mine.length - 1];
+  const { error } = await db.rpc('delete_stroke',
+    { p_edit_pw: state.editPw, p_stroke_id: lastS.id });
+  if(error){ toast(isWrongPw(error) ? t('wrongPw') : error.message); return; }
+  state.strokes = state.strokes.filter(s => s.id !== lastS.id);
+  redrawInk(); toast(t('undoOk'));
+}
+
+/* ================= 列印 / 匯出 PDF ================= */
+function openPrintPop(){
+  const pop = $('printPop'); if(!pop) return;
+  pop.style.display = 'block';
+  $('printProg').textContent = '';
+  const sl = localStorage.getItem('printLayer'), ss = localStorage.getItem('printScope');
+  if(sl){
+    const el = document.querySelector('input[name=pl][value="'+sl+'"]');
+    if(el) el.checked = true;
+  }
+  if(ss){
+    const el = document.querySelector('input[name=ps][value="'+ss+'"]');
+    if(el) el.checked = true;
+  }
+}
+function closePrintPop(){
+  const pop = $('printPop'); if(pop) pop.style.display = 'none';
+}
+function getPrintOpts(){
+  return {
+    layer: document.querySelector('input[name=pl]:checked').value,
+    scope: document.querySelector('input[name=ps]:checked').value
+  };
+}
+function savePrintOpts(o){
+  localStorage.setItem('printLayer', o.layer);
+  localStorage.setItem('printScope', o.scope);
+}
+async function fetchLayers(){
+  const strokesBy = {}, textsBy = {};
+  try{
+    const a = await db.from('strokes').select('*')
+      .eq('score_id', state.liveScoreId).order('created_at');
+    (a.data||[]).forEach(s => { (strokesBy[s.page] = strokesBy[s.page]||[]).push(s); });
+    const b = await db.from('texts').select('*')
+      .eq('score_id', state.liveScoreId).order('created_at');
+    (b.data||[]).forEach(x => { (textsBy[x.page] = textsBy[x.page]||[]).push(x); });
+  }catch(e){}
+  return { strokesBy, textsBy };
+}
+async function compositePage(n, layer, strokesBy, textsBy){
+  const page = await state.pdf.getPage(n);
+  const v1 = page.getViewport({ scale: 1 });
+  const scale = 1600 / v1.width;
+  const vp = page.getViewport({ scale });
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(1600);
+  cv.height = Math.round(v1.height * scale);
+  const c = cv.getContext('2d');
+  c.fillStyle = '#fff'; c.fillRect(0, 0, cv.width, cv.height);
+  await page.render({ canvasContext: c, viewport: vp }).promise;
+  if(layer !== 'text') (strokesBy[n]||[]).forEach(s => drawPath(c, s, cv.width, cv.height));
+  if(layer !== 'bow') (textsBy[n]||[]).forEach(x => drawTextAt(c, x, cv.width, cv.height));
+  return cv;
+}
+async function doPrint(){
+  if(!state.pdf || !state.liveScoreId) return;
+  const opts = getPrintOpts(); savePrintOpts(opts);
+  const pages = (opts.scope === 'all')
+    ? Array.from({ length: state.numPages }, (_, i) => i + 1)
+    : [state.currentPage];
+  const { strokesBy, textsBy } = await fetchLayers();
+  const area = $('printArea'); area.innerHTML = '';
+  closePrintPop();
+  for(let i = 0; i < pages.length; i++){
+    toast(t('printing') + ' ' + (i+1) + '/' + pages.length);
+    try{
+      const cv = await compositePage(pages[i], opts.layer, strokesBy, textsBy);
+      const img = document.createElement('img');
+      img.src = cv.toDataURL('image/jpeg', 0.88);
+      area.appendChild(img);
+    }catch(e){}
+  }
+  document.body.classList.add('printing');
+  setTimeout(() => { try{ window.print(); }catch(e){} }, 120);
+  setTimeout(() => {
+    document.body.classList.remove('printing');
+    area.innerHTML = '';
+  }, 90000);
+}
+async function doExport(){
+  if(!state.pdf || !state.liveScoreId) return;
+  if(!window.jspdf || !window.jspdf.jsPDF){ toast(t('noPdfLib')); return; }
+  const opts = getPrintOpts(); savePrintOpts(opts);
+  const pages = (opts.scope === 'all')
+    ? Array.from({ length: state.numPages }, (_, i) => i + 1)
+    : [state.currentPage];
+  const { strokesBy, textsBy } = await fetchLayers();
+  closePrintPop();
+  const { jsPDF } = window.jspdf;
+  let doc = null;
+  const title = (($('vTitle') && $('vTitle').textContent) || 'score')
+    .replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
+  for(let i = 0; i < pages.length; i++){
+    toast(t('printing') + ' ' + (i+1) + '/' + pages.length);
+    try{
+      const cv = await compositePage(pages[i], opts.layer, strokesBy, textsBy);
+      const orient = cv.width > cv.height ? 'l' : 'p';
+      if(!doc) doc = new jsPDF({ orientation: orient, unit:'pt', format:'a4' });
+      else doc.addPage('a4', orient);
+      const pw = doc.internal.pageSize.getWidth();
+      const ph = doc.internal.pageSize.getHeight();
+      const m = 10;
+      const r = Math.min((pw - 2*m) / cv.width, (ph - 2*m) / cv.height);
+      doc.addImage(cv.toDataURL('image/jpeg', 0.86), 'JPEG',
+        (pw - cv.width*r) / 2, (ph - cv.height*r) / 2, cv.width*r, cv.height*r);
+    }catch(e){}
+  }
+  if(doc) doc.save(title + '.pdf');
+  toast(t('exportDone'));
+}
+window.addEventListener('afterprint', () => {
+  document.body.classList.remove('printing');
+  const area = $('printArea'); if(area) area.innerHTML = '';
+});
+
+/* ================= badge ================= */
+function updateEditBtn(){
+  const b = $('editBtn');
+  if(b){
+    if(!state.isEditor) b.textContent = t('editBtn');
+    else b.textContent = state.isBroadcaster ? t('youMaster') : t('roleCo');
+  }
+  const tk = $('takeoverBtn');
+  if(tk) tk.style.display =
+    (state.isEditor && !state.isBroadcaster && state.masterName === '')
+      ? 'inline-flex' : 'none';
+  const sb = $('stopBtn');
+  if(sb) sb.style.display = state.isEditor ? 'inline-flex' : 'none';
+}
+function updateBadge(){
+  const b = $('masterBadge'); if(!b) return;
+  b.textContent = `${t('masterPage')}: ${state.masterPage}`;
+  b.classList.toggle('master-live', state.isBroadcaster);
+}
+
+/* ================= 手勢 ================= */
+let stageBound = false;
+let pinchS = null, justPinched = false;
+function setupStageGestures(){
+  const stage = $('stage');
+  if(stageBound || !stage) return;
+  stageBound = true;
+  stage.addEventListener('touchstart', e => {
+    if(e.touches.length === 2){
+      if(window.__cancelDraw) window.__cancelDraw();
+      const t0 = e.touches[0], t1 = e.touches[1];
+      const dx = t0.clientX - t1.clientX, dy = t0.clientY - t1.clientY;
+      pinchS = { d0: Math.hypot(dx, dy) || 1, z0: state.zoom,
+        mx: (t0.clientX + t1.clientX)/2, my: (t0.clientY + t1.clientY)/2,
+        sl: stage.scrollLeft, st: stage.scrollTop };
+      justPinched = true;
+      return;
+    }
+    if(e.touches.length === 1){
+      stage._sx = e.touches[0].clientX;
+      stage._moved = false;
+    }
+  }, { passive:true });
+  stage.addEventListener('touchmove', e => {
+    if(pinchS && e.touches.length === 2){
+      e.preventDefault();
+      const t0 = e.touches[0], t1 = e.touches[1];
+      const dist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+      const z = Math.max(1, Math.min(ZOOM_MAX, pinchS.z0 * dist / pinchS.d0));
+      state.zoom = z;
+      const wrap = $('zoomWrap');
+      if(wrap) wrap.style.transform = `scale(${z})`;
+      const mx = (t0.clientX + t1.clientX)/2, my = (t0.clientY + t1.clientY)/2;
+      stage.scrollLeft = Math.max(0, pinchS.sl - (mx - pinchS.mx));
+      stage.scrollTop  = Math.max(0, pinchS.st - (my - pinchS.my));
+      updateZoomUI();
+      return;
+    }
+    if(e.touches.length === 1 && typeof stage._sx === 'number'){
+      if(Math.abs(e.touches[0].clientX - stage._sx) > 50) stage._moved = true;
+    }
+  }, { passive:false });
+  stage.addEventListener('touchend', e => {
+    if(pinchS && e.touches.length < 2){
+      pinchS = null;
+      commitZoom();
+      return;
+    }
+    if(justPinched){
+      if(e.touches.length === 0) justPinched = false;
+      return;
+    }
+    if(state.tool && state.isEditor && !state.viewMode) return;
+    if(state.zoom > 1) return;
+    if(!e.changedTouches.length) return;
+    e.preventDefault();
+    const x = e.changedTouches[0].clientX;
+    const sx = stage._sx;
+    if(typeof sx === 'number' && !stage._moved){
+      const w = stage.clientWidth;
+      if(x > w * 0.66) goTo(state.currentPage + 1);
+      else if(x < w * 0.33) goTo(state.currentPage - 1);
+    }else if(typeof sx === 'number'){
+      const dx = x - sx;
+      if(dx < -60) goTo(state.currentPage + 1);
+      else if(dx > 60) goTo(state.currentPage - 1);
+    }
+  });
+  stage.addEventListener('click', e => {
+    if(justPinched){ justPinched = false; return; }
+    if(state.tool && state.isEditor && !state.viewMode) return;
+    if(state.zoom > 1) return;
+    const w = stage.clientWidth;
+    if(e.clientX > w * 0.66) goTo(state.currentPage + 1);
+    else if(e.clientX < w * 0.33) goTo(state.currentPage - 1);
+  });
+  document.addEventListener('keydown', e => {
+    if(!inViewerPage()) return;
+    if(e.key === 'ArrowRight') goTo(state.currentPage + 1);
+    if(e.key === 'ArrowLeft') goTo(state.currentPage - 1);
+    if(e.key === 'Escape' && state.fsMode) toggleFullscreen();
+  });
+}
+
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    fitHeader();
+    if(inViewerPage() && state.pdf){
+      renderPage(state.currentPage).then(() => Promise.all([loadStrokes(), loadTexts()]));
+    }
+  }, 300);
+});
+
+/* ================= 說明指南 ================= */
+function renderHelp(){
+  const zh = lang === 'zh';
+  $('appTitle').textContent = t('appTitle');
+  $('helpLabel').textContent = t('helpLabel');
+  $('langBtn').textContent = (zh) ? 'EN' : '中';
+  $('view').innerHTML = `
+  <a class="pill" href="#/library" style="text-decoration:none">${t('backLib')}</a>
+  <h2 style="margin:14px 0">${t('helpTitle')}</h2>
+
+  <details open><summary>🗂️ ${zh?'圖層對比（聲部長弓法 PDF）':'Layer compare'}</summary><div>
+    ${zh ? `
+    頂欄點擊「<b>🗂️ 圖層</b>」：<br>
+    • <b>上載</b>：聲部長可將自己 mark 好弓法的同一份譜（頁數必須與原譜相同）上載為圖層，並命名（例如：小提琴Ⅰ 弓法）<br>
+    • <b>對比</b>：任何人選擇姓名，該圖層 PDF 便會半透明疊在原譜上（透明度可調）<br>
+    • <b>編輯</b>：選擇「原譜」即可遮住圖層，查看乾淨原譜繼續編輯；app 內繪製的弓法永遠在最上層<br>
+    • 圖層只供畫面對比，<b>列印／匯出不包含圖層</b>；只可刪除自己上載的圖層（總監可刪除任何）`
+    : `
+    Tap 🗂️ Layers: section leaders upload their marked PDF (same page count) as a named layer. Anyone can pick a name to overlay it semi-transparently; pick "Original" to hide and edit. On-screen only — not in print/export.`}
+  </div></details>
+
+  <details><summary>✍️ ${zh?'最多兩位編輯者':'Max two editors'}</summary><div>
+    ${zh ? `
+    解鎖編輯時會認領名額（最多 <b>2</b> 位）：<br>
+    • <b>第 1 位＝👑 主控</b>：翻頁會廣播給全團<br>
+    • <b>第 2 位＝🤝 協作編輯</b>：可畫弓法／文字，翻頁只影響自己畫面<br>
+    • 滿額時會提示「已有兩位編輯者」；關閉 app 約 45 秒後名額自動釋放<br>
+    • 主控離開後，協作編輯會見到「👑 接管主控」按鈕<br>
+    • 點擊頂欄身份按鈕可退出編輯、釋放名額<br>
+    • 兩位編輯者請使用<b>不同姓名</b>`
+    : `
+    Unlocking claims one of 2 slots: slot 1 = Master (broadcasts page turns), slot 2 = Co-editor (annotates only). Slots auto-release ~45s after closing. Co-editor can take over when master leaves. Use different names.`}
+  </div></details>
+
+  <details><summary>⚡ ${zh?'30 秒開始（團員版）':'Quick start'}</summary><div>
+    ${zh ? `
+    <div class="step">1️⃣ 收到網址後，加入書籤</div>
+    <div class="step">2️⃣ 開啟網址 → 自動顯示正在廣播的樂譜</div>
+    <div class="step">3️⃣ 翻頁：左右滑動／點擊畫面左右兩側／◀▶ 按鈕／鍵盤方向鍵</div>
+    <div class="step">4️⃣ 放大：雙指張開（最高 5×）</div>
+    <div class="step">5️⃣ 找不到主控頁面？點擊「⇢ 跳至主控頁」</div>`
+    : `
+    Bookmark → open → broadcast appears. Swipe/tap/arrows to turn pages; pinch to zoom; jump-to-master if lost.`}
+  </div></details>
+
+  <details><summary>👁️ ${zh?'檢視任何樂譜':'View any score'}</summary><div>
+    ${zh ? `
+    樂譜庫中每份樂譜均有「👁️ 檢視」按鈕——所有人皆可點入查看（唯讀）。廣播中的樂譜有金色標籤；檢視頁設有「📻 廣播中 →」快捷按鈕。`
+    : `
+    Every score has a 👁️ View button (read-only). Live shortcut included.`}
+  </div></details>
+
+  <details><summary>✍️ ${zh?'弓法工具':'Bowing tools'}</summary><div>
+    ${zh ? `
+    解鎖編輯後，點擊右下角「🛠️」開關工具列。<b>面板關閉即為純檢視</b>。<br>
+    工具：✍️ 畫筆｜🖍️ 螢光筆｜┄ 虛線｜╱ 直線｜Π/V 記號｜🧽 點選擦除｜📝 文字｜🧴 白色（覆蓋匯入弓法）｜● 粗細｜↩️ 復原｜🧹 清除本頁我的<br>
+    自己的筆跡有光環（僅自己裝置可見）。`
+    : `
+    Tools: pen, highlighter, dashed, line, stamps, tap-erase, text, whiteout, thickness, undo, clear page (mine). Own strokes get a private halo.`}
+  </div></details>
+
+  <details><summary>👑 ${zh?'總監模式':'Chief mode'}</summary><div>
+    ${zh ? `
+    頂欄「👑 總監」＋譜務密碼啟用：可刪改任何人的弓法／文字、清除全頁、刪除任何圖層、取消廣播。清除後 30 秒內可復原。`
+    : `
+    👑 Chief (Librarian password) can erase/edit anyone's strokes & text, clear the page, delete any layer, stop broadcast. 30s undo.`}
+  </div></details>
+
+  <details><summary>❓ FAQ</summary><div>
+    ${zh ? `
+    • <b>上載圖層失敗？</b>頁數必須與原譜完全一致<br>
+    • <b>編輯名額被佔用？</b>等對方關閉 app 約 45 秒，或請對方退出編輯<br>
+    • <b>協作編輯想廣播翻頁？</b>等主控離開後點「👑 接管主控」<br>
+    • <b>清除錯誤？</b>30 秒內「↩️ 復原清除」<br>
+    • <b>總監無法啟用？</b>需先執行 verify_admin_pw 函數`
+    : `
+    • Layer upload fails? Page count must match<br>
+    • Slots full? Wait ~45s or ask them to exit<br>
+    • Co-editor wants broadcast? Take over when master leaves<br>
+    • Cleared by mistake? Undo within 30s`}
+  </div></details>
+
+  <details><summary>🌐 ${zh?'語言':'Language'}</summary><div>
+    ${zh ? '右上角「EN」任何頁面均可切換。' : 'Tap "中" (top right) on any page.'}
+  </div></details>`;
+}
+
+/* ================= Realtime ================= */
+db.channel('live-broadcast')
+  .on('postgres_changes', { event:'*', schema:'public', table:'broadcast' }, () => {
+    if(location.hash.startsWith('#/live')) refreshLive(true);
+    else if(location.hash === '#/library' || location.hash === '') renderLibrary();
+  })
+  .on('postgres_changes', { event:'*', schema:'public', table:'strokes' }, () => {
+    if(inViewerPage()) loadStrokes();
+  })
+  .on('postgres_changes', { event:'*', schema:'public', table:'texts' }, () => {
+    if(inViewerPage()) loadTexts();
+  })
+  .on('postgres_changes', { event:'*', schema:'public', table:'layers' }, () => {
+    if(state.liveScoreId) loadLayers(state.liveScoreId);
+  })
+  .on('postgres_changes', { event:'*', schema:'public', table:'editors' }, () => {
+    if(state.isEditor) heartbeat();
+  })
+  .subscribe();
+
+/* ================= 啟動 ================= */
+if(!location.hash) location.hash = '#/library';
+route();
+</script>
+</body>
+</html>
