@@ -21,7 +21,6 @@ RLS keeps all tables read-only for the public.
 
 - The anon key in the HTML is **public by design** (that's how Supabase
   client-side apps work); security comes from RLS + password-checked RPCs.
-- Change all three passwords immediately after setup (Step 4).
 - Never put a password in your display name — the app blocks names that
   contain a password.
 - For sensitive material, note that the PDF storage bucket is publicly
