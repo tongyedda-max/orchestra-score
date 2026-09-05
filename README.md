@@ -50,7 +50,7 @@ This project is **open source** and free for the community, under the
 > don't charge money for it.
 
 Copyright (c) 2026 — released for the global community orchestra movement. 🎻
-
+> gh repo clone tongyedda-max/orchestra-score
 
 
 
